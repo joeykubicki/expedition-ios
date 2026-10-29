@@ -46,12 +46,14 @@ struct RootView: View {
     }
 }
 
-/// One tab per place category.
+/// One tab per place category. Remembers the last selected tab.
 struct CategoryTabView: View {
+    @AppStorage("selectedTab") private var selectedTab = PlaceCategory.park
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ForEach(PlaceCategory.allCases, id: \.self) { category in
-                Tab(category.title, systemImage: category.symbolName) {
+                Tab(category.title, systemImage: category.symbolName, value: category) {
                     CategoryScreen(category: category)
                 }
             }

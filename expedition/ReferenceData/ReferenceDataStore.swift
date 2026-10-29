@@ -9,6 +9,8 @@ final class ReferenceDataStore {
     private(set) var countries: [Place] = []
     private(set) var isLoaded = false
     private(set) var loadError: (any Error)?
+    /// USPS code → name for states and the territories parks are in.
+    private(set) var stateNames: [String: String] = [:]
 
     private var placesByID: [PlaceID: Place] = [:]
 
@@ -24,6 +26,12 @@ final class ReferenceDataStore {
 
     func place(for id: PlaceID) -> Place? {
         placesByID[id]
+    }
+
+    /// "California · Nevada" for a park; `nil` for other places.
+    func stateSummary(for place: Place) -> String? {
+        guard !place.stateCodes.isEmpty else { return nil }
+        return place.stateCodes.map { stateNames[$0] ?? $0 }.joined(separator: " · ")
     }
 
     func load(from bundle: Bundle = .main) async {
@@ -49,6 +57,10 @@ final class ReferenceDataStore {
         placesByID = Dictionary(
             (data.parks + data.states + data.countries).map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
+        )
+        stateNames = ReferenceDataLoader.territoryNames.merging(
+            data.states.map { ($0.id.code, $0.name) },
+            uniquingKeysWith: { _, state in state }
         )
         isLoaded = true
     }

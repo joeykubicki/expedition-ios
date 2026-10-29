@@ -10,6 +10,9 @@ nonisolated enum ReferenceDataLoader {
     /// Countries whose name we show differently from `Locale`'s.
     static let countryNameOverrides = ["PS": "Palestine"]
 
+    /// Territories that have national parks but aren't in the states list.
+    static let territoryNames = ["AS": "American Samoa", "VI": "U.S. Virgin Islands"]
+
     static func loadParks(from bundle: Bundle = .main) throws -> [Place] {
         struct ParkRecord: Decodable {
             let id: String
