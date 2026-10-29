@@ -50,7 +50,10 @@ expedition/
   Shared/              # Reusable views, theme/colors, utilities
   Resources/           # Assets, bundled data files
 expeditionTests/
+tools/                 # build-reference-data.py regenerates states/countries GeoJSON (not part of the app build)
 ```
+
+`parks.json` is hand-maintained. `states.geojson` and `countries.geojson` are generated; edit the script and rerun it rather than editing them by hand.
 
 Keep views small and composable. Extract subviews rather than letting a single `body` grow large. Put non-trivial logic in testable types outside views.
 
@@ -67,7 +70,7 @@ User data references places by a stable string ID, never by display name:
 
 - Countries: ISO 3166-1 alpha-2 code (e.g. `JP`, `FR`)
 - US states: USPS postal code (e.g. `UT`, `CA`)
-- National parks: NPS park code (e.g. `grca`, `yose`)
+- National parks: the web app's kebab-case slug (e.g. `grand-canyon`, `kings-canyon`). Not NPS codes: those aren't unique (Sequoia and Kings Canyon share `seki`)
 
 Get country display names from `Locale.current.localizedString(forRegionCode:)` so they're localized automatically.
 
@@ -118,7 +121,7 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 
 - Theme: a vintage travel atlas. Warm parchment land tones, rust/terracotta for visited places, evergreen green for visited parks. Pull exact colors from `STYLE` in the web app and define them once in `Shared/` as named colors in the asset catalog with light and dark variants.
 - Follow iOS conventions over web patterns: tab bar navigation, bottom sheets instead of map popups, tap instead of hover, native lists and search.
-- Map approach is not finalized (Apple Maps base with themed overlays vs. a custom-drawn stylized atlas). Ask before committing to one.
+- Map approach (decided): Apple Maps base (SwiftUI `Map`) with a muted style and themed `MapPolygon`/`Annotation` overlays for states, countries, and parks. Not a custom-drawn atlas.
 - Simplify country geometry before bundling so map rendering stays fast.
 
 ## Accessibility (required, not optional)
