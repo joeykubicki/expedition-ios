@@ -48,7 +48,7 @@ expedition/
     Stats/
     Settings/          # Export/import, about, sync status
   Shared/              # Reusable views, theme/colors, utilities
-  Resources/           # Assets, bundled data files
+  Assets.xcassets      # Xcode's default location; named theme colors live here
 expeditionTests/
 tools/                 # build-reference-data.py regenerates states/countries GeoJSON (not part of the app build)
 ```
@@ -119,7 +119,9 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 
 ## Design
 
-- Theme: a vintage travel atlas. Warm parchment land tones, rust/terracotta for visited places, evergreen green for visited parks. Pull exact colors from `STYLE` in the web app and define them once in `Shared/` as named colors in the asset catalog with light and dark variants.
+- Theme: a vintage travel atlas. Warm parchment land tones, rust/terracotta for visited places, evergreen green for visited parks. Colors are named color sets in `Assets.xcassets` with light and dark variants, used via generated symbols (`Color.visited`, `.parkVisited`, `.land`, `.boundary`, `.ink`, `.inkSoft`, `.paper`, `.visitedDeep`, `.visitedSoft`). Use `PlaceCategory.visitedColor` rather than picking per view. Don't hard-code hex values in Swift.
+- Note: the web app has since switched land to cool gray and has no green; the parchment and evergreen choices here are deliberate.
+- Typography: system fonts only. Use `.fontDesign(.serif)` (New York) for display text like progress headlines; default SF for everything else.
 - Follow iOS conventions over web patterns: tab bar navigation, bottom sheets instead of map popups, tap instead of hover, native lists and search.
 - Map approach (decided): Apple Maps base (SwiftUI `Map`) with a muted style and themed `MapPolygon`/`Annotation` overlays for states, countries, and parks. Not a custom-drawn atlas.
 - Simplify country geometry before bundling so map rendering stays fast.
