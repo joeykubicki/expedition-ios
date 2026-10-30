@@ -115,8 +115,7 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 
 1. Visit dates and a timeline view (done: a fourth Timeline tab)
 2. Photos (done: per place, in the detail sheet)
-3. Home-screen widget showing progress
-4. Shareable rendered image of the user's map
+3. Shareable rendered image of the user's map
 
 ### v2 (direction only; don't build unless asked)
 
@@ -130,6 +129,7 @@ Depth over breadth: make the existing three categories richer rather than adding
 - Login of any kind, Firebase, a backend, or analytics
 - Location tracking or location-based suggestions
 - Social features
+- Home Screen or Lock Screen widgets (decided against)
 
 ## Design
 
