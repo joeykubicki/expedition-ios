@@ -53,6 +53,12 @@ UG US UY UZ VA VC VE VN VU WS XK YE ZA ZM ZW
 # Non-sovereign areas shown and trackable on the map, but excluded from the total.
 EXTRAS = {"GL", "PR", "AQ"}
 
+# Natural Earth features (by ADMIN name) folded into the internationally
+# recognized country they're part of, so the map has no gap or internal border.
+# Western Sahara is left as Natural Earth draws it (de facto: Morocco's outline
+# includes the area it administers; the remaining strip is unassigned).
+MERGES = {"SO": ["Somaliland"], "CY": ["Northern Cyprus"]}
+
 EXCLUDED_STATES = {"DC"}
 
 
@@ -121,6 +127,60 @@ def simplify_geometry(geometry, tolerance):
     return {"type": "MultiPolygon", "coordinates": result}
 
 
+def polygons_of(geometry):
+    return geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
+
+
+def ring_area(ring):
+    return abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(ring, ring[1:]))) / 2
+
+
+def join_rings(a, b):
+    """Joins two closed rings that share one contiguous stretch of border
+    (identical vertices, traversed in opposite directions) into a single ring
+    without that border. Returns None if they don't share exactly one stretch."""
+    a, b = a[:-1], b[:-1]
+    shared = set(map(tuple, a)) & set(map(tuple, b))
+    if len(shared) < 2:
+        return None
+    is_shared = [tuple(p) in shared for p in a]
+    starts = [i for i in range(len(a)) if is_shared[i] and not is_shared[i - 1]]
+    if len(starts) != 1:
+        return None
+    start = starts[0]
+    end = start
+    while is_shared[(end + 1) % len(a)]:
+        end = (end + 1) % len(a)
+    # a's own coastline/border: from the end of the shared stretch round to its start.
+    outer_a = [a[(end + i) % len(a)] for i in range((start - end) % len(a) + 1)]
+    # b's own part: from a[start] to a[end] the way that avoids the shared stretch.
+    i, j = b.index(a[start]), b.index(a[end])
+    for step in (1, -1):
+        path = [b[(i + step * k) % len(b)] for k in range(((j - i) * step) % len(b) + 1)]
+        if not any(tuple(p) in shared for p in path[1:-1]):
+            joined = outer_a + path[1:-1]
+            return joined + [joined[0]]
+    return None
+
+
+def merge_geometry(target, sources):
+    """Folds each source polygon into the target polygon it borders, or adds
+    it as a separate part if it borders none."""
+    polygons = [list(p) for p in polygons_of(target)]
+    for source in sources:
+        for polygon in polygons_of(source):
+            for index, existing in enumerate(polygons):
+                joined = join_rings(existing[0], polygon[0])
+                if joined:
+                    expected = ring_area(existing[0]) + ring_area(polygon[0])
+                    assert abs(ring_area(joined) - expected) < expected * 1e-6, "Merge changed the area"
+                    polygons[index] = [joined] + existing[1:] + polygon[1:]
+                    break
+            else:
+                polygons.append(polygon)
+    return {"type": "MultiPolygon", "coordinates": polygons}
+
+
 def feature(properties, geometry, tolerance):
     return {"type": "Feature", "properties": properties, "geometry": simplify_geometry(geometry, tolerance)}
 
@@ -140,16 +200,20 @@ def build_countries(source):
             chosen[code] = f
     missing = wanted - chosen.keys()
     assert not missing, f"Missing countries: {sorted(missing)}"
+    by_admin = {f["properties"]["ADMIN"]: f for f in source["features"]}
     features = []
     for code in sorted(chosen):
         p = chosen[code]["properties"]
+        geometry = chosen[code]["geometry"]
+        if code in MERGES:
+            geometry = merge_geometry(geometry, [by_admin[name]["geometry"] for name in MERGES[code]])
         properties = {
             "id": code,
             "sovereign": code in SOVEREIGN,
             "labelLatitude": round(p["LABEL_Y"], PRECISION),
             "labelLongitude": round(p["LABEL_X"], PRECISION),
         }
-        features.append(feature(properties, chosen[code]["geometry"], COUNTRY_TOLERANCE))
+        features.append(feature(properties, geometry, COUNTRY_TOLERANCE))
     return features
 
 

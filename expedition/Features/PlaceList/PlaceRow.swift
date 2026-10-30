@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// One place in a category list, with a button to mark it visited.
+/// One place in a category list, with a button to mark it visited. Tapping
+/// the rest of the row opens the place's details.
 struct PlaceRow: View {
     let place: Place
     let subtitle: String?
     let isVisited: Bool
     let onToggleVisited: () -> Void
+    let onSelect: () -> Void
 
     private var flag: String? {
         place.category == .country ? FlagEmoji.forRegionCode(place.id.code) : nil
@@ -39,6 +41,8 @@ struct PlaceRow: View {
             }
             .buttonStyle(.borderless)
         }
+        .contentShape(.rect)
+        .onTapGesture(perform: onSelect)
         .swipeActions(edge: .leading) {
             Button(isVisited ? "Not Visited" : "Visited",
                    systemImage: isVisited ? "xmark.circle" : "checkmark.circle",
@@ -48,6 +52,9 @@ struct PlaceRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(subtitle.map { "\(place.name), \($0)" } ?? place.name)
         .accessibilityValue(isVisited ? "Visited" : "Not visited")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Shows details and memories")
+        .accessibilityAction { onSelect() }
         .accessibilityAction(named: Text(toggleTitle), onToggleVisited)
     }
 }
@@ -70,8 +77,8 @@ struct PlaceRow: View {
         countsTowardTotal: true
     )
     List {
-        PlaceRow(place: zion, subtitle: "Utah", isVisited: true, onToggleVisited: {})
-        PlaceRow(place: zion, subtitle: "Utah", isVisited: false, onToggleVisited: {})
-        PlaceRow(place: japan, subtitle: nil, isVisited: true, onToggleVisited: {})
+        PlaceRow(place: zion, subtitle: "Utah", isVisited: true, onToggleVisited: {}, onSelect: {})
+        PlaceRow(place: zion, subtitle: "Utah", isVisited: false, onToggleVisited: {}, onSelect: {})
+        PlaceRow(place: japan, subtitle: nil, isVisited: true, onToggleVisited: {}, onSelect: {})
     }
 }

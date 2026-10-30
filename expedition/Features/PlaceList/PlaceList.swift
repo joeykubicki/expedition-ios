@@ -8,16 +8,18 @@ struct PlaceList: View {
     let category: PlaceCategory
     let searchText: String
     @Binding var visitFilter: VisitFilter
+    @Binding var selectedPlace: Place?
 
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
     @Query private var visitedEntries: [PlaceEntry]
     @State private var feedbackTrigger = 0
 
-    init(category: PlaceCategory, searchText: String, visitFilter: Binding<VisitFilter>) {
+    init(category: PlaceCategory, searchText: String, visitFilter: Binding<VisitFilter>, selectedPlace: Binding<Place?>) {
         self.category = category
         self.searchText = searchText
         _visitFilter = visitFilter
+        _selectedPlace = selectedPlace
         let raw = category.rawValue
         _visitedEntries = Query(filter: #Predicate<PlaceEntry> { $0.categoryRaw == raw && $0.isVisited })
     }
@@ -72,7 +74,8 @@ struct PlaceList: View {
                             place: place,
                             subtitle: subtitle(for: place),
                             isVisited: visitedCodes.contains(place.id.code),
-                            onToggleVisited: { toggleVisited(place) }
+                            onToggleVisited: { toggleVisited(place) },
+                            onSelect: { selectedPlace = place }
                         )
                     }
                 } header: {
@@ -132,10 +135,12 @@ private struct PlaceListPreview: View {
     var initialSearch = ""
     @State private var visitFilter = VisitFilter.all
     @State private var searchText = ""
+    @State private var selectedPlace: Place?
 
     var body: some View {
         NavigationStack {
-            PlaceList(category: category, searchText: searchText, visitFilter: $visitFilter)
+            PlaceList(category: category, searchText: searchText, visitFilter: $visitFilter,
+                      selectedPlace: $selectedPlace)
                 .searchable(text: $searchText)
                 .navigationTitle(category.title)
         }
