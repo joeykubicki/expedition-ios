@@ -12,6 +12,14 @@ struct CategoryMapView: View {
     @Environment(ReferenceDataStore.self) private var referenceData
     @Query private var visitedEntries: [PlaceEntry]
     @State private var shapes: [MapShape] = []
+    @State private var mapWidth: Double = 0
+    /// Width of the visible area in `MKMapPoint`s, updated when the camera stops.
+    @State private var visibleMapPointWidth: Double?
+    /// How close (in points) park markers can get before they're grouped: a
+    /// bit more than a count marker's size. Scales with Dynamic Type, like
+    /// the markers themselves.
+    @ScaledMetric(relativeTo: .caption) private var clusterSpacingWidth = 44.0
+    @ScaledMetric(relativeTo: .caption) private var clusterSpacingHeight = 30.0
 
     init(category: PlaceCategory, position: Binding<MapCameraPosition>, selectedPlace: Binding<Place?>) {
         self.category = category
@@ -26,25 +34,43 @@ struct CategoryMapView: View {
         MapReader { proxy in
             Map(position: $position) {
                 ForEach(shapes) { shape in
+                    let isSelected = shape.placeID == selectedPlace?.id
+                    let stroke = isSelected ? Color.ink : Color.boundary
+                    let lineWidth = isSelected ? 2.5 : 0.5
                     MapPolygon(shape.polygon)
                         .foregroundStyle(fill(for: shape, visitedCodes: visitedCodes))
-                        .stroke(
-                            shape.placeID == selectedPlace?.id ? Color.ink : Color.boundary,
-                            lineWidth: shape.placeID == selectedPlace?.id ? 2.5 : 0.5
-                        )
+                        .stroke(shape.seamlessOutline == nil ? stroke : .clear, lineWidth: lineWidth)
+                    if let outline = shape.seamlessOutline {
+                        ForEach(outline.indices, id: \.self) { index in
+                            MapPolyline(outline[index])
+                                .stroke(stroke, lineWidth: lineWidth)
+                        }
+                    }
                 }
                 .mapOverlayLevel(level: .aboveRoads)
 
                 if category == .park {
-                    ForEach(referenceData.parks) { park in
-                        Annotation(park.name, coordinate: park.labelCoordinate.clLocationCoordinate, anchor: .center) {
-                            parkButton(park, isVisited: visitedCodes.contains(park.id.code))
+                    ForEach(parkClusters) { cluster in
+                        Annotation(
+                            cluster.parks.map(\.name).formatted(.list(type: .and)),
+                            coordinate: cluster.coordinate.clLocationCoordinate,
+                            anchor: .center
+                        ) {
+                            if cluster.isSingle {
+                                parkButton(cluster.parks[0], isVisited: visitedCodes.contains(cluster.parks[0].id.code))
+                            } else {
+                                clusterButton(cluster, visitedCodes: visitedCodes)
+                            }
                         }
                     }
                     .annotationTitles(.hidden)
                 }
             }
             .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+            .onMapCameraChange(frequency: .onEnd) { context in
+                visibleMapPointWidth = context.rect.size.width
+            }
+            .onGeometryChange(for: Double.self) { $0.size.width } action: { mapWidth = $0 }
             .onTapGesture { point in
                 guard category != .park, let coordinate = proxy.convert(point, from: .local) else { return }
                 selectedPlace = PlaceHitTester.place(
@@ -68,6 +94,20 @@ struct CategoryMapView: View {
         }
     }
 
+    /// Parks grouped by how crowded they'd look at the current zoom. The
+    /// selected park always stands alone so its marker stays visible.
+    private var parkClusters: [ParkCluster] {
+        let pointsPerMapPoint = visibleMapPointWidth.map { mapWidth / $0 }
+        let others = referenceData.parks.filter { $0.id != selectedPlace?.id }
+        let selected = referenceData.parks.filter { $0.id == selectedPlace?.id }
+        return ParkClusterer.clusters(
+            for: others,
+            pointsPerMapPoint: pointsPerMapPoint,
+            spacing: CGSize(width: clusterSpacingWidth, height: clusterSpacingHeight)
+        )
+            + selected.map { ParkCluster(parks: [$0]) }
+    }
+
     private func fill(for shape: MapShape, visitedCodes: Set<String>) -> Color {
         if category != .park, visitedCodes.contains(shape.placeID.code) {
             return category.visitedColor.opacity(0.75)
@@ -85,6 +125,21 @@ struct CategoryMapView: View {
         .accessibilityLabel(park.name)
         .accessibilityValue(isVisited ? "Visited" : "Not visited")
         .accessibilityHint("Shows details and memories")
+    }
+
+    private func clusterButton(_ cluster: ParkCluster, visitedCodes: Set<String>) -> some View {
+        let visitedCount = cluster.parks.count { visitedCodes.contains($0.id.code) }
+        return Button {
+            withAnimation {
+                position = .region(cluster.zoomRegion)
+            }
+        } label: {
+            ParkClusterMarker(count: cluster.parks.count, visitedCount: visitedCount)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(cluster.parks.count) parks: \(cluster.parks.map(\.name).formatted(.list(type: .and)))")
+        .accessibilityValue("\(visitedCount) visited")
+        .accessibilityHint("Zooms in to show these parks")
     }
 }
 

@@ -7,6 +7,9 @@ struct MapShape: Identifiable {
     let id: String
     let placeID: PlaceID
     let polygon: MKPolygon
+    /// Outline to draw instead of stroking `polygon`, for the few shapes cut
+    /// at the antimeridian (see `AntimeridianSeams`); `nil` otherwise.
+    let seamlessOutline: [MKPolyline]?
 
     static func shapes(for places: [Place]) -> [MapShape] {
         places.flatMap { place in
@@ -19,8 +22,21 @@ struct MapShape: Identifiable {
                 return MapShape(
                     id: "\(place.id.category.rawValue)-\(place.id.code)-\(index)",
                     placeID: place.id,
-                    polygon: MKPolygon(coordinates: exterior, count: exterior.count, interiorPolygons: holes)
+                    polygon: MKPolygon(coordinates: exterior, count: exterior.count, interiorPolygons: holes),
+                    seamlessOutline: seamlessOutline(for: part)
                 )
+            }
+        }
+    }
+
+    private static func seamlessOutline(for part: BoundaryPolygon) -> [MKPolyline]? {
+        let rings = [part.exterior] + part.holes
+        let runs = rings.map(AntimeridianSeams.outlineRuns)
+        guard runs.contains(where: { $0 != nil }) else { return nil }
+        return zip(rings, runs).flatMap { ring, ringRuns in
+            (ringRuns ?? [ring]).map { run in
+                let coordinates = run.map(\.clLocationCoordinate)
+                return MKPolyline(coordinates: coordinates, count: coordinates.count)
             }
         }
     }
