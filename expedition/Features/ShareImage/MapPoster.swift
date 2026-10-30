@@ -2,26 +2,24 @@ import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The share image: an atlas plate with the title, progress, and map. Laid
-/// out at a fixed point size and rendered at `scale` for a 2160 × 2700 pixel
-/// (4:5) image. Always light, and with Dynamic Type pinned, so every shared
-/// image looks the same whatever the device's settings.
+/// The category share image: an atlas plate with the title, progress, and
+/// map, laid out at a fixed point size for its `PosterFormat`.
 struct MapPoster: View {
-    static let size = CGSize(width: 400, height: 500)
-    static let scale: CGFloat = 5.4
     /// The world is wide and short, so it gets nearly the full plate.
     static func mapWidth(for category: PlaceCategory) -> CGFloat {
         category == .country ? 368 : 356
     }
 
     let category: PlaceCategory
+    let format: PosterFormat
     let progress: CategoryProgress
     let map: PosterMap
     let date: Date
 
-    init(category: PlaceCategory, referenceData: ReferenceDataStore, visitedCodes: Set<String>, date: Date = .now) {
+    init(category: PlaceCategory, format: PosterFormat = .post, referenceData: ReferenceDataStore, visitedCodes: Set<String>, date: Date = .now) {
         let places = referenceData.places(in: category)
         self.category = category
+        self.format = format
         progress = CategoryProgress(category: category, places: places, visitedCodes: visitedCodes)
         map = PosterMap(category: category, places: places, states: referenceData.states, visitedCodes: visitedCodes, width: Self.mapWidth(for: category))
         self.date = date
@@ -39,9 +37,9 @@ struct MapPoster: View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, 30)
-                .padding(.top, 32)
+                .padding(.top, format == .story ? 56 : 32)
             Spacer(minLength: 12)
-            PosterMapCanvas(map: map, category: category)
+            PosterMapCanvas(map: map)
                 .frame(width: map.size.width, height: map.size.height)
             if !map.outlying.isEmpty {
                 outlyingParks
@@ -51,17 +49,9 @@ struct MapPoster: View {
             Spacer(minLength: 12)
             footer
                 .padding(.horizontal, 30)
-                .padding(.bottom, 28)
+                .padding(.bottom, format == .story ? 48 : 28)
         }
-        .frame(width: Self.size.width, height: Self.size.height)
-        .background(Color.paper)
-        .overlay {
-            // A double rule around the plate, like an old atlas page.
-            Rectangle().strokeBorder(Color.boundary, lineWidth: 1).padding(10)
-            Rectangle().strokeBorder(Color.boundary.opacity(0.6), lineWidth: 0.5).padding(14)
-        }
-        .environment(\.colorScheme, .light)
-        .dynamicTypeSize(.large)
+        .posterPlate(format)
     }
 
     private var header: some View {
@@ -116,9 +106,21 @@ struct MapPoster: View {
     }
 
     private func legendItem(isVisited: Bool, label: LocalizedStringResource) -> some View {
+        PosterLegendItem(category: category, isVisited: isVisited, dotRadius: map.dotRadius, label: label)
+    }
+}
+
+/// A legend swatch: a dot for parks, a filled box for states and countries.
+struct PosterLegendItem: View {
+    let category: PlaceCategory
+    let isVisited: Bool
+    let dotRadius: CGFloat
+    let label: LocalizedStringResource
+
+    var body: some View {
         HStack(spacing: 5) {
             if category == .park {
-                PosterDot(isVisited: isVisited, color: category.visitedColor, radius: map.dotRadius)
+                PosterDot(isVisited: isVisited, color: category.visitedColor, radius: dotRadius)
             } else {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(isVisited ? category.visitedColor : Color.land)
@@ -132,10 +134,10 @@ struct MapPoster: View {
     }
 }
 
-/// The map itself: land, visited fills, inset frames, and dots on top.
-private struct PosterMapCanvas: View {
+/// The map itself: land, visited fills (in each place's category color),
+/// inset frames, and dots on top.
+struct PosterMapCanvas: View {
     let map: PosterMap
-    let category: PlaceCategory
 
     var body: some View {
         Canvas { context, _ in
@@ -148,12 +150,12 @@ private struct PosterMapCanvas: View {
                     path.addLines(ring)
                     path.closeSubpath()
                 }
-                context.fill(path, with: .color(area.isVisited ? category.visitedColor : .land), style: FillStyle(eoFill: true))
+                context.fill(path, with: .color(area.isVisited ? area.placeID.category.visitedColor : .land), style: FillStyle(eoFill: true))
                 context.stroke(path, with: .color(.boundary), lineWidth: 0.35)
             }
             // Visited dots on top where parks crowd together.
             for dot in map.dots.sorted(by: { !$0.isVisited && $1.isVisited }) {
-                PosterDot.draw(in: context, at: dot.center, radius: map.dotRadius, isVisited: dot.isVisited, color: category.visitedColor)
+                PosterDot.draw(in: context, at: dot.center, radius: map.dotRadius, isVisited: dot.isVisited, color: dot.placeID.category.visitedColor)
             }
         }
     }
@@ -161,7 +163,7 @@ private struct PosterMapCanvas: View {
 
 /// Filled with a check when visited, hollow when not: a shape difference,
 /// not just a color one.
-private struct PosterDot: View {
+struct PosterDot: View {
     let isVisited: Bool
     let color: Color
     let radius: CGFloat
@@ -193,9 +195,10 @@ private struct PosterDot: View {
 
 /// Turns a poster into a PNG.
 enum PosterRenderer {
-    static func image(of poster: MapPoster) -> CGImage? {
+    /// `poster` must have a fixed size (see `posterPlate(_:)`).
+    static func image(of poster: some View) -> CGImage? {
         let renderer = ImageRenderer(content: poster)
-        renderer.scale = MapPoster.scale
+        renderer.scale = PosterFormat.scale
         renderer.isOpaque = true
         return renderer.cgImage
     }
@@ -214,13 +217,14 @@ enum PosterRenderer {
 #if DEBUG
 private struct MapPosterPreview: View {
     let category: PlaceCategory
+    var format = PosterFormat.post
     var visited = true
     @Environment(ReferenceDataStore.self) private var referenceData
 
     var body: some View {
         let codes = visited ? Set(PreviewSupport.visitedSample.filter { $0.category == category }.map(\.code)) : []
-        MapPoster(category: category, referenceData: referenceData, visitedCodes: codes)
-            .scaleEffect(0.8)
+        MapPoster(category: category, format: format, referenceData: referenceData, visitedCodes: codes)
+            .scaleEffect(format == .story ? 0.55 : 0.8)
     }
 }
 
@@ -236,6 +240,11 @@ private struct MapPosterPreview: View {
 
 #Preview("Countries") {
     MapPosterPreview(category: .country)
+        .previewEnvironment()
+}
+
+#Preview("Story") {
+    MapPosterPreview(category: .state, format: .story)
         .previewEnvironment()
 }
 

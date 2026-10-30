@@ -12,6 +12,9 @@ struct CategoryMapView: View {
     @Environment(ReferenceDataStore.self) private var referenceData
     /// Visited or on the bucket list.
     @Query private var markedEntries: [PlaceEntry]
+    /// States and countries, built once.
+    @State private var outlines: [PlaceOutline] = []
+    /// The parks map's plain state outlines, built once.
     @State private var shapes: [MapShape] = []
     @State private var mapWidth: Double = 0
     /// Width of the visible area in `MKMapPoint`s, updated when the camera stops.
@@ -35,67 +38,20 @@ struct CategoryMapView: View {
     var body: some View {
         let visitedCodes = Set(markedEntries.filter(\.isVisited).map(\.placeCode))
         let bucketListCodes = Set(markedEntries.filter(\.wantsToVisit).map(\.placeCode))
-        MapReader { proxy in
-            Map(position: $position) {
-                ForEach(shapes) { shape in
-                    let isSelected = shape.placeID == selectedPlace?.id
-                    let stroke = isSelected ? Color.ink : Color.boundary
-                    let lineWidth = isSelected ? 2.5 : 0.5
-                    MapPolygon(shape.polygon)
-                        .foregroundStyle(fill(for: shape, visitedCodes: visitedCodes, bucketListCodes: bucketListCodes))
-                        .stroke(shape.seamlessOutline == nil ? stroke : .clear, lineWidth: lineWidth)
-                    if let outline = shape.seamlessOutline {
-                        ForEach(outline.indices, id: \.self) { index in
-                            MapPolyline(outline[index])
-                                .stroke(stroke, lineWidth: lineWidth)
-                        }
-                    }
-                }
-                .mapOverlayLevel(level: .aboveRoads)
-
-                // Dashed borders on bucket-list places, drawn over their
-                // neighbors' solid ones: the cue that isn't just color.
-                if category != .park {
-                    ForEach(shapes.filter { bucketListCodes.contains($0.placeID.code) }) { shape in
-                        let outline = shape.outline
-                        ForEach(outline.indices, id: \.self) { index in
-                            MapPolyline(outline[index])
-                                .stroke(category.visitedColor, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                        }
-                    }
-                    .mapOverlayLevel(level: .aboveRoads)
-                }
-
-                if category == .park {
-                    ForEach(parkClusters) { cluster in
-                        Annotation(
-                            cluster.parks.map(\.name).formatted(.list(type: .and)),
-                            coordinate: cluster.coordinate.clLocationCoordinate,
-                            anchor: .center
-                        ) {
-                            if cluster.isSingle {
-                                let park = cluster.parks[0]
-                                parkButton(park, isVisited: visitedCodes.contains(park.id.code),
-                                           isOnBucketList: bucketListCodes.contains(park.id.code))
-                            } else {
-                                clusterButton(cluster, visitedCodes: visitedCodes, bucketListCodes: bucketListCodes)
-                            }
-                        }
-                    }
-                    .annotationTitles(.hidden)
-                }
-            }
-            .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-            .onMapCameraChange(frequency: .onEnd) { context in
-                visibleMapPointWidth = context.rect.size.width
-            }
-            .onGeometryChange(for: Double.self) { $0.size.width } action: { mapWidth = $0 }
-            .onTapGesture { point in
-                guard category != .park, let coordinate = proxy.convert(point, from: .local) else { return }
-                selectedPlace = PlaceHitTester.place(
-                    at: Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude),
-                    in: referenceData.places(in: category)
-                )
+        Group {
+            if category == .park {
+                parkMap(visitedCodes: visitedCodes, bucketListCodes: bucketListCodes)
+            } else {
+                OutlineMapView(
+                    outlines: outlines,
+                    places: referenceData.places(in: category),
+                    visitedCodes: visitedCodes,
+                    bucketListCodes: bucketListCodes,
+                    selectedPlaceID: selectedPlace?.id,
+                    visitedColor: category.visitedColor,
+                    position: $position
+                ) { selectedPlace = $0 }
+                .ignoresSafeArea()
             }
         }
         .overlay(alignment: .top) {
@@ -108,9 +64,56 @@ struct CategoryMapView: View {
         }
         .modifier(OutlineMapAccessibility(category: category, visitedCount: visitedCodes.count, bucketListCount: bucketListCodes.count))
         .task {
-            // Parks sit on plain parchment states; the other tabs color their own outlines.
-            shapes = MapShape.shapes(for: category == .country ? referenceData.countries : referenceData.states)
+            switch category {
+            case .park where shapes.isEmpty:
+                shapes = await MapShape.build(for: referenceData.states)
+            case .state where outlines.isEmpty, .country where outlines.isEmpty:
+                outlines = await PlaceOutline.outlines(for: referenceData.places(in: category))
+            default:
+                break
+            }
         }
+    }
+
+    /// Parks sit on plain parchment states, which never change, so the
+    /// SwiftUI `Map` (with its SwiftUI markers) stays quick here.
+    private func parkMap(visitedCodes: Set<String>, bucketListCodes: Set<String>) -> some View {
+        Map(position: $position) {
+            ForEach(shapes) { shape in
+                MapPolygon(shape.polygon)
+                    .foregroundStyle(Color.land.opacity(0.6))
+                    .stroke(shape.seamlessOutline == nil ? Color.boundary : .clear, lineWidth: 0.5)
+                if let outline = shape.seamlessOutline {
+                    ForEach(outline.indices, id: \.self) { index in
+                        MapPolyline(outline[index])
+                            .stroke(Color.boundary, lineWidth: 0.5)
+                    }
+                }
+            }
+            .mapOverlayLevel(level: .aboveRoads)
+
+            ForEach(parkClusters) { cluster in
+                Annotation(
+                    cluster.parks.map(\.name).formatted(.list(type: .and)),
+                    coordinate: cluster.coordinate.clLocationCoordinate,
+                    anchor: .center
+                ) {
+                    if cluster.isSingle {
+                        let park = cluster.parks[0]
+                        parkButton(park, isVisited: visitedCodes.contains(park.id.code),
+                                   isOnBucketList: bucketListCodes.contains(park.id.code))
+                    } else {
+                        clusterButton(cluster, visitedCodes: visitedCodes, bucketListCodes: bucketListCodes)
+                    }
+                }
+            }
+            .annotationTitles(.hidden)
+        }
+        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        .onMapCameraChange(frequency: .onEnd) { context in
+            visibleMapPointWidth = context.rect.size.width
+        }
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { mapWidth = $0 }
     }
 
     /// Parks grouped by how crowded they'd look at the current zoom. The
@@ -125,17 +128,6 @@ struct CategoryMapView: View {
             spacing: CGSize(width: clusterSpacingWidth, height: clusterSpacingHeight)
         )
             + selected.map { ParkCluster(parks: [$0]) }
-    }
-
-    private func fill(for shape: MapShape, visitedCodes: Set<String>, bucketListCodes: Set<String>) -> Color {
-        guard category != .park else { return Color.land.opacity(0.6) }
-        if visitedCodes.contains(shape.placeID.code) {
-            return category.visitedColor.opacity(0.75)
-        }
-        if bucketListCodes.contains(shape.placeID.code) {
-            return Color.visitedSoft.opacity(0.8)
-        }
-        return Color.land.opacity(0.6)
     }
 
     private func parkButton(_ park: Place, isVisited: Bool, isOnBucketList: Bool) -> some View {

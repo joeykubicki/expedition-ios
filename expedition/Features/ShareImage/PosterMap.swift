@@ -40,10 +40,33 @@ nonisolated struct PosterMap: Sendable {
         case .country:
             self = Self.world(places, visitedCodes: visitedCodes, width: width)
         case .state:
-            self = Self.unitedStates(states: places, parks: [], visitedCodes: visitedCodes, width: width)
+            self = Self.unitedStates(states: places, visitedStates: visitedCodes, parks: [], visitedParks: [], width: width)
         case .park:
-            self = Self.unitedStates(states: states, parks: places, visitedCodes: visitedCodes, width: width)
+            self = Self.unitedStates(states: states, visitedStates: [], parks: places, visitedParks: visitedCodes, width: width)
         }
+    }
+
+    /// Whether a year's places fit the US map: some states or parks, and no
+    /// country but the US itself.
+    static func isUnitedStatesOnly(_ places: [Place]) -> Bool {
+        places.contains { $0.category != .country }
+            && !places.contains { $0.category == .country && $0.id.code != "US" }
+    }
+
+    /// One year's places, all filled: the US map (with only that year's
+    /// parks) when they fit it, otherwise the world, where states and parks
+    /// light up the United States.
+    static func year(_ places: [Place], states: [Place], countries: [Place], width: (_ isUnitedStates: Bool) -> CGFloat) -> PosterMap {
+        let codes = { (category: PlaceCategory) in Set(places.filter { $0.category == category }.map(\.id.code)) }
+        if isUnitedStatesOnly(places) {
+            let parks = places.filter { $0.category == .park }
+            return unitedStates(states: states, visitedStates: codes(.state), parks: parks, visitedParks: codes(.park), width: width(true))
+        }
+        var visitedCountries = codes(.country)
+        if places.contains(where: { $0.category != .country }) {
+            visitedCountries.insert("US")
+        }
+        return world(countries, visitedCodes: visitedCountries, width: width(false))
     }
 
     private init(size: CGSize, areas: [Area], dots: [Dot], dotRadius: CGFloat, insets: [CGRect], outlying: [Outlying]) {
@@ -104,9 +127,7 @@ nonisolated struct PosterMap: Sendable {
         }
     }
 
-    private static func unitedStates(states: [Place], parks: [Place], visitedCodes: Set<String>, width: CGFloat) -> PosterMap {
-        // State fills only mean "visited" on the states map.
-        let statesVisited = parks.isEmpty ? visitedCodes : []
+    private static func unitedStates(states: [Place], visitedStates statesVisited: Set<String>, parks: [Place], visitedParks visitedCodes: Set<String>, width: CGFloat) -> PosterMap {
         let dotRadius = (width * 0.0125).rounded(.up)
         func region(of place: Place) -> Region {
             Region(stateCode: place.category == .state ? place.id.code : place.stateCodes.first)

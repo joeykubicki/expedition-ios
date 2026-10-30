@@ -2,8 +2,8 @@ import MapKit
 import SwiftUI
 
 /// One polygon of a place's outline, ready for `MapPolygon`. Built once per
-/// map appearance; the reference data itself stays MapKit-free.
-struct MapShape: Identifiable {
+/// map; the reference data itself stays MapKit-free.
+nonisolated struct MapShape: Identifiable {
     let id: String
     let placeID: PlaceID
     let polygon: MKPolygon
@@ -17,6 +17,12 @@ struct MapShape: Identifiable {
         seamlessOutline ?? ([polygon] + (polygon.interiorPolygons ?? [])).map { ring in
             MKPolyline(points: ring.points(), count: ring.pointCount)
         }
+    }
+
+    /// `shapes(for:)` off the main thread, for maps with many places.
+    @concurrent
+    static func build(for places: [Place]) async -> sending [MapShape] {
+        shapes(for: places)
     }
 
     static func shapes(for places: [Place]) -> [MapShape] {

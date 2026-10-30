@@ -11,6 +11,13 @@ struct TimelineScreen: View {
     /// Off shows only each place's first visit.
     @AppStorage("timeline.showsReturnVisits") private var showsReturnVisits = true
     @State private var selectedPlace: Place?
+    @State private var mapYear: MapYear?
+
+    /// The year whose map is showing.
+    private struct MapYear: Identifiable {
+        let year: Int
+        var id: Int { year }
+    }
 
     var body: some View {
         let timeline = Timeline(
@@ -33,22 +40,12 @@ struct TimelineScreen: View {
                 ForEach(timeline.years) { year in
                     Section {
                         ForEach(year.trips) { trip in
-                            if trip.isSingle {
-                                let item = trip.items[0]
-                                PlaceSummaryRow(
-                                    place: item.place,
-                                    detail: item.visit.formatted(),
-                                    isReturnVisit: item.isReturn,
-                                    hint: "Shows details and memories"
-                                ) {
-                                    selectedPlace = item.place
-                                }
-                            } else {
-                                TripCard(trip: trip) { selectedPlace = $0 }
-                            }
+                            TimelineTripRow(trip: trip) { selectedPlace = $0 }
                         }
                     } header: {
-                        TimelineYearHeader(year: year, showsCountryCount: filter == .all)
+                        TimelineYearHeader(year: year, showsCountryCount: filter == .all) {
+                            mapYear = MapYear(year: year.year)
+                        }
                     }
                 }
 
@@ -81,6 +78,16 @@ struct TimelineScreen: View {
             .sheet(item: $selectedPlace) { place in
                 PlaceDetailSheet(place: place, store: PlaceEntryStore(context: modelContext))
             }
+            .sheet(item: $mapYear) { mapYear in
+                YearMapSheet(year: mapYear.year, category: filter.category, showsReturnVisits: showsReturnVisits)
+            }
+            #if DEBUG
+            .onAppear {
+                // Launch with `-OpenYearMap <year>` for simulator screenshots.
+                let year = UserDefaults.standard.integer(forKey: "OpenYearMap")
+                if year > 0 { mapYear = MapYear(year: year) }
+            }
+            #endif
         }
     }
 
@@ -102,27 +109,36 @@ struct TimelineScreen: View {
     }
 }
 
-/// "2024" in the display serif, with that year's stats: "5 places · 3 new
-/// · 2 countries".
+/// "2024" in the display serif, with that year's stats ("5 places · 3 new
+/// · 2 countries") and a button to see the year on a map.
 private struct TimelineYearHeader: View {
     let year: Timeline.Year
     /// Only with All selected; within a category it would repeat the count.
     let showsCountryCount: Bool
+    let onShowMap: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(verbatim: String(year.year))
-                .font(.title2.weight(.semibold))
-                .fontDesign(.serif)
-                .foregroundStyle(Color.ink)
-            Spacer()
-            stats
-                .font(.subheadline)
-                .foregroundStyle(Color.inkSoft)
-                .multilineTextAlignment(.trailing)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: String(year.year))
+                    .font(.title2.weight(.semibold))
+                    .fontDesign(.serif)
+                    .foregroundStyle(Color.ink)
+                Spacer()
+                stats
+                    .font(.subheadline)
+                    .foregroundStyle(Color.inkSoft)
+                    .multilineTextAlignment(.trailing)
+            }
+            .accessibilityElement(children: .combine)
+            Button(action: onShowMap) {
+                Label("Show \(String(year.year)) on a Map", systemImage: "map")
+                    .labelStyle(.iconOnly)
+                    .font(.body)
+            }
+            .buttonStyle(.borderless)
         }
         .textCase(nil)
-        .accessibilityElement(children: .combine)
     }
 
     private var stats: Text {
@@ -137,68 +153,6 @@ private struct TimelineYearHeader: View {
         case (false, false):
             Text("^[\(year.placeCount) place](inflect: true)")
         }
-    }
-}
-
-/// Places visited on overlapping dates: the trip's dates, then each place
-/// (with its own dates when they differ), each opening its details.
-private struct TripCard: View {
-    let trip: Timeline.Trip
-    let onSelect: (Place) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(trip.span.formatted(), systemImage: "suitcase.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.ink)
-                Spacer()
-                Text("Trip")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.inkSoft)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Trip, \(trip.span.formatted()), \(trip.items.count) places")
-            .accessibilityAddTraits(.isHeader)
-
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(trip.items) { item in
-                    PlaceSummaryRow(
-                        place: item.place,
-                        detail: coversTheWholeTrip(item) ? item.place.category.eyebrow : item.visit.formatted(),
-                        isReturnVisit: item.isReturn,
-                        accessibilityContext: context(for: item),
-                        hint: "Shows details and memories"
-                    ) {
-                        onSelect(item.place)
-                    }
-                }
-            }
-            .padding(.leading, 12)
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(Color.boundary)
-                    .frame(width: 2)
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .contain)
-    }
-
-    private func coversTheWholeTrip(_ item: Timeline.Item) -> Bool {
-        item.visit.start == trip.span.start && item.visit.end == trip.span.end
-    }
-
-    /// "October 12–15, 2023, trip with Utah", so each place reads on its own.
-    private func context(for item: Timeline.Item) -> String {
-        let others = trip.items.map(\.place).filter { $0.id != item.place.id }
-        var names: [String] = []
-        for place in others where !names.contains(place.name) {
-            names.append(place.name)
-        }
-        let dates = coversTheWholeTrip(item) ? "\(trip.span.formatted()), " : ""
-        return String(localized: "\(dates)trip with \(names.formatted(.list(type: .and)))")
     }
 }
 

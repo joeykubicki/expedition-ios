@@ -4,25 +4,66 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Shows the rendered map poster for a category, with a Share button.
+/// The category map poster's share sheet, opened from each map tab.
 struct SharePreviewSheet: View {
     let category: PlaceCategory
 
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
+    @State private var visitedCodes: Set<String>?
+
+    var body: some View {
+        if let visitedCodes {
+            let progress = CategoryProgress(category: category, places: referenceData.places(in: category), visitedCodes: visitedCodes)
+            PosterShareSheet(
+                fileName: String(localized: "Expedition – \(String(localized: category.title))"),
+                accessibilityLabel: String(localized: "Map poster: \(progress.visited) of \(progress.total) \(category.pluralNoun) visited")
+            ) { format in
+                MapPoster(category: category, format: format, referenceData: referenceData, visitedCodes: visitedCodes)
+            }
+        } else {
+            ProgressView()
+                .task {
+                    do {
+                        visitedCodes = try PlaceEntryStore(context: modelContext).visitedCodes(in: category)
+                    } catch {
+                        Logger.data.error("Reading visited places for the share image failed: \(error)")
+                        visitedCodes = []
+                    }
+                }
+        }
+    }
+}
+
+/// Previews a poster in the chosen format (remembered across posters) and
+/// shares it as a PNG.
+struct PosterShareSheet<Poster: View>: View {
+    let fileName: String
+    let accessibilityLabel: String
+    @ViewBuilder let poster: (PosterFormat) -> Poster
+
     @Environment(\.dismiss) private var dismiss
-    @State private var rendered: RenderedPoster?
-    @State private var didFail = false
+    @AppStorage("posterFormat") private var format = PosterFormat.post
+    @State private var rendered: [PosterFormat: RenderedPoster] = [:]
+    @State private var failed: Set<PosterFormat> = []
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
+                Picker("Format", selection: $format) {
+                    ForEach(PosterFormat.allCases) { format in
+                        Text(format.title).tag(format)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 preview
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if let rendered {
+
+                if let current = rendered[format] {
                     ShareLink(
-                        item: rendered,
-                        preview: SharePreview(rendered.title, image: Image(decorative: rendered.image, scale: 1))
+                        item: current,
+                        preview: SharePreview(current.title, image: Image(decorative: current.image, scale: 1))
                     ) {
                         Label("Share", systemImage: "square.and.arrow.up")
                             .font(.headline)
@@ -34,29 +75,29 @@ struct SharePreviewSheet: View {
             }
             .padding()
             .background(Color.paper)
-            .navigationTitle("Share Map")
+            .navigationTitle("Share")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await render() }
+            .task(id: format) { await render(format) }
         }
     }
 
     @ViewBuilder
     private var preview: some View {
-        if let rendered {
-            Image(decorative: rendered.image, scale: MapPoster.scale)
+        if let current = rendered[format] {
+            Image(decorative: current.image, scale: PosterFormat.scale)
                 .resizable()
                 .scaledToFit()
                 .clipShape(.rect(cornerRadius: 6))
                 .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
                 .accessibilityElement()
-                .accessibilityLabel(rendered.accessibilityLabel)
+                .accessibilityLabel(accessibilityLabel)
                 .accessibilityAddTraits(.isImage)
-        } else if didFail {
+        } else if failed.contains(format) {
             ContentUnavailableView(
                 "Couldn't Make the Image",
                 systemImage: "exclamationmark.triangle",
@@ -67,25 +108,14 @@ struct SharePreviewSheet: View {
         }
     }
 
-    private func render() async {
-        guard rendered == nil else { return }
-        do {
-            let visitedCodes = try PlaceEntryStore(context: modelContext).visitedCodes(in: category)
-            let poster = MapPoster(category: category, referenceData: referenceData, visitedCodes: visitedCodes)
-            guard let image = PosterRenderer.image(of: poster), let png = await PosterRenderer.png(image) else {
-                didFail = true
-                return
-            }
-            rendered = RenderedPoster(
-                image: image,
-                png: png,
-                title: String(localized: "Expedition – \(String(localized: category.title))"),
-                accessibilityLabel: String(localized: "Map poster: \(poster.progress.visited) of \(poster.progress.total) \(category.pluralNoun) visited")
-            )
-        } catch {
-            Logger.data.error("Making the share image failed: \(error)")
-            didFail = true
+    private func render(_ format: PosterFormat) async {
+        guard rendered[format] == nil else { return }
+        guard let image = PosterRenderer.image(of: poster(format)), let png = await PosterRenderer.png(image) else {
+            failed.insert(format)
+            return
         }
+        let suffix = format == .story ? String(localized: " (Story)") : ""
+        rendered[format] = RenderedPoster(image: image, png: png, title: fileName + suffix)
     }
 }
 
@@ -94,7 +124,6 @@ struct RenderedPoster: Transferable {
     let image: CGImage
     let png: Data
     let title: String
-    let accessibilityLabel: String
 
     static var transferRepresentation: some TransferRepresentation {
         DataRepresentation(exportedContentType: .png) { $0.png }

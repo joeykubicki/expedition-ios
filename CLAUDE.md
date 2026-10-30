@@ -48,7 +48,7 @@ expedition/
     Visits/            # Visit dates in the detail sheet
     BucketList/        # The Bucket List tab
     Photos/            # Photo compression, the detail sheet's photo row, the viewer
-    ShareImage/        # The shareable map poster: projections, layout, rendering
+    ShareImage/        # Share posters (category map, year in review): projections, layout, rendering
     Timeline/          # The Timeline tab
     Stats/
     Settings/          # Export/import, about, sync status
@@ -126,7 +126,10 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 Depth over breadth: make the existing three categories richer rather than adding new place types.
 
 1. Bucket list (done: a fifth Bucket List tab, a list filter, dashed map styling, checked off automatically when visited; the share poster stays visited-only)
-2. Deeper timeline (done: trips group visits whose dates overlap, sharing a day counts, year-only visits never group; year headers show "5 places · 3 new · 2 countries"; return visits are tagged, with a toolbar toggle for first visits only). Later candidates: year map, year-in-review poster, per-visit notes.
+2. Deeper timeline (done: trips group visits whose dates overlap, sharing a day counts, year-only visits never group; year headers show "5 places · 3 new · 2 countries"; return visits are tagged, with a toolbar toggle for first visits only).
+3. Year map (done: a map button on each Timeline year header opens that year's places, numbered by trip, framed to fit across the 180° meridian, following the Timeline's filter and return-visit setting).
+4. Year-in-review poster (done: Share in the year map sheet; stats, days on the road from exact-day visits only, longest trip, the US or world map, and the trip list with ★ first visits). Every poster comes as Post (4:5, 2160 × 2700) or Story (9:16, 2160 × 3840).
+Later candidates: per-visit notes.
 
 ### Out of scope
 
@@ -141,7 +144,7 @@ Depth over breadth: make the existing three categories richer rather than adding
 - Note: the web app has since switched land to cool gray and has no green; the parchment and evergreen choices here are deliberate.
 - Typography: system fonts only. Use `.fontDesign(.serif)` (New York) for display text like progress headlines; default SF for everything else.
 - Follow iOS conventions over web patterns: tab bar navigation, bottom sheets instead of map popups, tap instead of hover, native lists and search.
-- Map approach (decided): Apple Maps base (SwiftUI `Map`) with a muted style and themed `MapPolygon`/`Annotation` overlays for states, countries, and parks. Not a custom-drawn atlas.
+- Map approach (decided): Apple Maps base with a muted style and themed overlays. Not a custom-drawn atlas. The Parks map and the year map use SwiftUI `Map` (`MapPolygon`/`Annotation`). The States and Countries maps use `MKMapView` (`OutlineMapView`), with one overlay per place added once and recolored in place. SwiftUI `Map` re-diffs every overlay on each change, which froze the app for over a second with ~1,400 country polygons. Build outlines once per map, off the main thread, never in `body`.
 - Simplify country geometry before bundling so map rendering stays fast.
 - Borders follow de facto control, as Natural Earth's default data draws them (e.g. Morocco's outline includes the part of Western Sahara it administers; the rest is unassigned). Exception: Somaliland and Northern Cyprus are folded into Somalia and Cyprus (`MERGES` in the build script). Don't change border policy without asking.
 
