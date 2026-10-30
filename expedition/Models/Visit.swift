@@ -125,4 +125,48 @@ extension VisitDate {
     nonisolated var date: Date {
         Self.calendar.date(from: DateComponents(year: year, month: month ?? 1, day: day ?? 1, hour: 12))!
     }
+
+    /// The first day of the date's period: itself for a day, the 1st of a
+    /// month, or January 1st of a year.
+    nonisolated var firstDay: VisitDate {
+        VisitDate(year: year, month: month ?? 1, day: day ?? 1)
+    }
+
+    /// The last day of the date's period: itself for a day, the end of a
+    /// month, or December 31st of a year.
+    nonisolated var lastDay: VisitDate {
+        if day != nil { return self }
+        let month = month ?? 12
+        let days = Self.calendar.range(of: .day, in: .month, for: VisitDate(year: year, month: month).date)!.count
+        return VisitDate(year: year, month: month, day: days)
+    }
+
+    /// The same date at a coarser precision (or unchanged if it's already
+    /// that coarse).
+    nonisolated func truncated(to precision: Precision) -> VisitDate {
+        switch precision {
+        case .day: self
+        case .month: VisitDate(year: year, month: month)
+        case .year: VisitDate(year: year)
+        }
+    }
+}
+
+extension Visit {
+    /// Every day the visit covers, from the first day of its start to the
+    /// last day of its end, so visits of different precision can be compared.
+    nonisolated var days: ClosedRange<VisitDate> {
+        start.firstDay...(end ?? start).lastDay
+    }
+}
+
+extension VisitDate.Precision {
+    /// Day is finest, year coarsest.
+    nonisolated var coarseness: Int {
+        switch self {
+        case .day: 0
+        case .month: 1
+        case .year: 2
+        }
+    }
 }

@@ -126,7 +126,7 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 Depth over breadth: make the existing three categories richer rather than adding new place types.
 
 1. Bucket list (done: a fifth Bucket List tab, a list filter, dashed map styling, checked off automatically when visited; the share poster stays visited-only)
-2. Deeper timeline, chosen: trips (overlapping visits grouped), year stats ("5 places · 3 new"), and first-visit tags. Later candidates: year map, year-in-review poster, per-visit notes.
+2. Deeper timeline (done: trips group visits whose dates overlap, sharing a day counts, year-only visits never group; year headers show "5 places · 3 new · 2 countries"; return visits are tagged, with a toolbar toggle for first visits only). Later candidates: year map, year-in-review poster, per-visit notes.
 
 ### Out of scope
 

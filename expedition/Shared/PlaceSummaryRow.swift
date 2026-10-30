@@ -5,6 +5,10 @@ import SwiftUI
 struct PlaceSummaryRow: View {
     let place: Place
     let detail: String
+    /// Marks a return visit on the Timeline.
+    var isReturnVisit = false
+    /// Extra spoken context, such as "trip with Utah".
+    var accessibilityContext: String?
     let hint: LocalizedStringResource
     let onSelect: () -> Void
 
@@ -22,6 +26,14 @@ struct PlaceSummaryRow: View {
                     Text(detail)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    if isReturnVisit {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Return visit")
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.inkSoft)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -29,9 +41,17 @@ struct PlaceSummaryRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(detail == place.category.eyebrow ? "\(place.name), \(detail)" : "\(place.name), \(place.category.eyebrow), \(detail)")
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(Text(hint))
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [place.name, place.category.eyebrow]
+        if detail != place.category.eyebrow { parts.append(detail) }
+        if isReturnVisit { parts.append(String(localized: "Return visit")) }
+        if let accessibilityContext { parts.append(accessibilityContext) }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

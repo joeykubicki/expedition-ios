@@ -26,6 +26,23 @@ struct VisitDateTests {
         ])
     }
 
+    @Test func periodsCoverTheirDays() {
+        #expect(VisitDate(year: 2024, month: 2).lastDay == VisitDate(year: 2024, month: 2, day: 29))
+        #expect(VisitDate(year: 2023, month: 2).firstDay == VisitDate(year: 2023, month: 2, day: 1))
+        #expect(VisitDate(year: 2023).lastDay == VisitDate(year: 2023, month: 12, day: 31))
+        #expect(VisitDate(year: 2023, month: 4, day: 9).lastDay == VisitDate(year: 2023, month: 4, day: 9))
+
+        let months = Visit(start: VisitDate(year: 2019, month: 5), end: VisitDate(year: 2019, month: 6))
+        #expect(months.days == VisitDate(year: 2019, month: 5, day: 1)...VisitDate(year: 2019, month: 6, day: 30))
+    }
+
+    @Test func truncatesToCoarserPrecisions() {
+        let date = VisitDate(year: 2024, month: 6, day: 3)
+        #expect(date.truncated(to: .month) == VisitDate(year: 2024, month: 6))
+        #expect(date.truncated(to: .year) == VisitDate(year: 2024))
+        #expect(VisitDate(year: 2024).truncated(to: .day) == VisitDate(year: 2024))
+    }
+
     @Test func encodesOnlyWhatIsKnown() throws {
         let json = try String(decoding: JSONEncoder().encode(VisitDate(year: 2015)), as: UTF8.self)
         #expect(json == #"{"year":2015}"#)

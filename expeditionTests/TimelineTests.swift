@@ -20,12 +20,22 @@ struct TimelineTests {
         entry.visits = visits
     }
 
-    private func timeline(_ category: PlaceCategory? = nil) throws -> Timeline {
+    private func timeline(_ category: PlaceCategory? = nil, showsReturnVisits: Bool = true) throws -> Timeline {
         Timeline(
             entries: try container.mainContext.fetch(FetchDescriptor<PlaceEntry>()),
             category: category,
+            showsReturnVisits: showsReturnVisits,
             place: referenceData.place(for:)
         )
+    }
+
+    private func day(_ year: Int, _ month: Int, _ day: Int) -> VisitDate {
+        VisitDate(year: year, month: month, day: day)
+    }
+
+    /// Place names per trip, newest trip first.
+    private func trips(_ category: PlaceCategory? = nil) throws -> [[String]] {
+        try timeline(category).years.flatMap(\.trips).map { $0.items.map(\.place.name) }
     }
 
     @Test func groupsByStartYearNewestFirst() throws {
@@ -81,6 +91,113 @@ struct TimelineTests {
         #expect(countries.years.flatMap(\.items).map(\.place.name) == ["Japan"])
         #expect(countries.undated.map(\.name) == ["Peru"])
         #expect(try timeline(.state).isEmpty)
+    }
+
+    // MARK: Trips
+
+    @Test func overlappingVisitsAreOneTripInOrder() throws {
+        try record(.park, "bryce-canyon", [Visit(start: day(2023, 10, 15), end: day(2023, 10, 17))])
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12), end: day(2023, 10, 15))])
+
+        #expect(try trips() == [["Zion", "Bryce Canyon"]], "Sharing a day counts; oldest first within the trip")
+        let span = try #require(try timeline().years.first?.trips.first?.span)
+        #expect(span.start == day(2023, 10, 12) && span.end == day(2023, 10, 17))
+    }
+
+    @Test func backToBackDaysAreSeparateTrips() throws {
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12), end: day(2023, 10, 15))])
+        try record(.park, "bryce-canyon", [Visit(start: day(2023, 10, 16))])
+
+        #expect(try trips() == [["Bryce Canyon"], ["Zion"]])
+    }
+
+    @Test func tripsFollowChains() throws {
+        try record(.park, "zion", [Visit(start: day(2023, 10, 1), end: day(2023, 10, 3))])
+        try record(.park, "bryce-canyon", [Visit(start: day(2023, 10, 3), end: day(2023, 10, 6))])
+        try record(.park, "arches", [Visit(start: day(2023, 10, 6))])
+
+        #expect(try trips() == [["Zion", "Bryce Canyon", "Arches"]], "Zion and Arches don't overlap, but Bryce joins them")
+    }
+
+    @Test func aMonthOverlapsTheDaysInIt() throws {
+        try record(.state, "UT", [Visit(start: VisitDate(year: 2023, month: 10))])
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12), end: day(2023, 10, 15))])
+
+        let trip = try #require(try timeline().years.first?.trips.first)
+        #expect(trip.items.map(\.place.name) == ["Utah", "Zion"])
+        #expect(trip.span == Visit(id: trip.span.id, start: VisitDate(year: 2023, month: 10)), "Shown at the coarsest precision")
+    }
+
+    @Test func yearOnlyVisitsNeverGroup() throws {
+        try record(.state, "AZ", [Visit(start: VisitDate(year: 2019))])
+        try record(.park, "grand-canyon", [Visit(start: VisitDate(year: 2019))])
+        try record(.country, "FR", [Visit(start: VisitDate(year: 2019, month: 5))])
+
+        #expect(try trips().map(\.count) == [1, 1, 1])
+    }
+
+    @Test func tripsOnlyGroupWhatTheFilterShows() throws {
+        try record(.state, "UT", [Visit(start: VisitDate(year: 2023, month: 10))])
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12))])
+
+        #expect(try trips() == [["Utah", "Zion"]])
+        #expect(try trips(.park) == [["Zion"]])
+    }
+
+    // MARK: First and return visits
+
+    @Test func laterVisitsAreReturns() throws {
+        try record(.park, "zion", [
+            Visit(start: day(2023, 10, 12)),
+            Visit(start: VisitDate(year: 2016)),
+            Visit(start: VisitDate(year: 2019, month: 6)),
+        ])
+
+        let items = try timeline().years.flatMap(\.items)
+        #expect(items.map(\.visit.start.year) == [2023, 2019, 2016])
+        #expect(items.map(\.isReturn) == [true, true, false])
+    }
+
+    @Test func sameDayVisitsStillHaveOneFirst() throws {
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12)), Visit(start: day(2023, 10, 12))])
+
+        #expect(try timeline().years.flatMap(\.items).count { !$0.isReturn } == 1)
+    }
+
+    @Test func hidingReturnsLeavesFirstVisits() throws {
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12)), Visit(start: VisitDate(year: 2016))])
+        try record(.park, "arches", [Visit(start: day(2023, 10, 14))])
+
+        let firsts = try timeline(showsReturnVisits: false)
+        #expect(firsts.years.map(\.year) == [2023, 2016])
+        #expect(firsts.years[0].items.map(\.place.name) == ["Arches"])
+    }
+
+    // MARK: Year stats
+
+    @Test func yearsCountNewPlacesAndCountries() throws {
+        try record(.park, "zion", [Visit(start: day(2023, 10, 12)), Visit(start: VisitDate(year: 2016))])
+        try record(.park, "arches", [Visit(start: day(2023, 10, 14))])
+        try record(.country, "JP", [Visit(start: VisitDate(year: 2023, month: 4))])
+        try record(.country, "FR", [Visit(start: VisitDate(year: 2023, month: 5)), Visit(start: VisitDate(year: 2023, month: 8))])
+
+        let years = try timeline().years
+        let year2023 = try #require(years.first)
+        #expect(year2023.placeCount == 4)
+        #expect(year2023.newPlaceCount == 3, "Zion was new in 2016")
+        #expect(year2023.countryCount == 2)
+        #expect(years.last?.newPlaceCount == 1)
+    }
+
+    @Test func sampleZionTripIncludesUtah() throws {
+        let sample = PreviewSupport.container()
+        let timeline = Timeline(
+            entries: try sample.mainContext.fetch(FetchDescriptor<PlaceEntry>()),
+            category: nil,
+            place: referenceData.place(for:)
+        )
+        let trips = timeline.years.flatMap(\.trips).filter { !$0.isSingle }
+        #expect(trips.map { $0.items.map(\.place.name) } == [["Utah", "Zion"]])
     }
 
     @Test func sampleDataHasDatedAndUndatedPlaces() throws {
