@@ -3,6 +3,7 @@ import Foundation
 nonisolated enum VisitFilter: String, CaseIterable, Sendable {
     case all
     case visited
+    case bucketList
     case notVisited
 }
 
@@ -10,6 +11,7 @@ nonisolated enum VisitFilter: String, CaseIterable, Sendable {
 /// tested without views.
 nonisolated enum PlaceListFilter {
     /// Places matching the search text and visit filter, in their original order.
+    /// `bucketListCodes` should hold only places not yet visited.
     ///
     /// Search ignores case and accents and matches the place name, an exact
     /// state/country code, or (for parks) the name of a state the park is in.
@@ -18,6 +20,7 @@ nonisolated enum PlaceListFilter {
         searchText: String,
         visitFilter: VisitFilter,
         visitedCodes: Set<String>,
+        bucketListCodes: Set<String> = [],
         stateNames: [String: String]
     ) -> [Place] {
         let query = normalized(searchText)
@@ -26,6 +29,7 @@ nonisolated enum PlaceListFilter {
             switch visitFilter {
             case .all: break
             case .visited: guard isVisited else { return false }
+            case .bucketList: guard !isVisited, bucketListCodes.contains(place.id.code) else { return false }
             case .notVisited: guard !isVisited else { return false }
             }
             return query.isEmpty || matches(place, query: query, stateNames: stateNames)

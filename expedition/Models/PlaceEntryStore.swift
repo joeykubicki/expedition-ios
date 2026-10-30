@@ -43,7 +43,7 @@ final class PlaceEntryStore {
     func setVisited(_ visited: Bool, for id: PlaceID) throws {
         let entry = try entryOrCreate(for: id)
         guard entry.isVisited != visited else { return }
-        entry.isVisited = visited
+        entry.setVisited(visited)
         entry.updatedAt = now()
         try context.save()
     }
@@ -54,6 +54,27 @@ final class PlaceEntryStore {
         let visited = try !(entry(for: id)?.isVisited ?? false)
         try setVisited(visited, for: id)
         return visited
+    }
+
+    /// Adds or removes a place from the bucket list. Visited places can't be
+    /// added.
+    func setOnBucketList(_ onList: Bool, for id: PlaceID) throws {
+        if !onList, try entry(for: id) == nil { return }
+        let entry = try entryOrCreate(for: id)
+        guard entry.isOnBucketList != onList, !(onList && entry.isVisited) else { return }
+        entry.setOnBucketList(onList, at: now())
+        entry.updatedAt = now()
+        try context.save()
+    }
+
+    /// Codes of the places in a category that are on the bucket list and not
+    /// yet visited.
+    func bucketListCodes(in category: PlaceCategory) throws -> Set<String> {
+        let raw = category.rawValue
+        let listed = try context.fetch(FetchDescriptor<PlaceEntry>(
+            predicate: #Predicate { $0.categoryRaw == raw && $0.isOnBucketList && !$0.isVisited }
+        ))
+        return Set(listed.map(\.placeCode))
     }
 
     /// Codes of the visited places in a category.

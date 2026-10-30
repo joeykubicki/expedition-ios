@@ -1,19 +1,29 @@
 import SwiftUI
 
 /// Tree marker for a park: outlined when unvisited, filled with a checkmark
-/// badge when visited (so it never relies on color alone).
+/// badge when visited, and dashed with a bookmark badge when on the bucket
+/// list (so it never relies on color alone).
 struct ParkMarker: View {
     let isVisited: Bool
+    var isOnBucketList = false
     let isSelected: Bool
+
+    private var wantsToVisit: Bool { isOnBucketList && !isVisited }
 
     var body: some View {
         Image(systemName: "tree.fill")
             .font(.caption)
             .foregroundStyle(isVisited ? Color.white : Color.parkVisited)
             .padding(4)
-            .background(isVisited ? Color.parkVisited : Color.paper, in: .circle)
-            .overlay(Circle().strokeBorder(Color.parkVisited, lineWidth: isSelected ? 3 : 1.5))
+            .background(isVisited ? Color.parkVisited : wantsToVisit ? Color.visitedSoft : Color.paper, in: .circle)
+            .overlay(
+                Circle().strokeBorder(
+                    Color.parkVisited,
+                    style: StrokeStyle(lineWidth: isSelected ? 3 : 1.5, dash: wantsToVisit && !isSelected ? [3, 2] : [])
+                )
+            )
             .visitedBadge(isVisited)
+            .bucketListBadge(wantsToVisit)
             .scaleEffect(isSelected ? 1.25 : 1)
             .animation(.snappy, value: isSelected)
     }
@@ -25,6 +35,7 @@ struct ParkMarker: View {
 struct ParkClusterMarker: View {
     let count: Int
     let visitedCount: Int
+    var bucketListCount = 0
 
     private var allVisited: Bool { visitedCount == count }
 
@@ -46,6 +57,27 @@ struct ParkClusterMarker: View {
                 visitedCountBadge
             }
         }
+        .overlay(alignment: .topLeading) {
+            if bucketListCount > 0 {
+                bucketListCountBadge
+            }
+        }
+    }
+
+    private var bucketListCountBadge: some View {
+        HStack(spacing: 1) {
+            Image(systemName: "bookmark.fill")
+                .imageScale(.small)
+            Text(bucketListCount, format: .number)
+                .monospacedDigit()
+        }
+        .font(.caption2.weight(.bold))
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(Color.visitedDeep, in: .capsule)
+        .overlay(Capsule().strokeBorder(Color.paper, lineWidth: 1))
+        .offset(x: -8, y: -8)
     }
 
     private var visitedCountBadge: some View {
@@ -66,6 +98,19 @@ struct ParkClusterMarker: View {
 }
 
 private extension View {
+    func bucketListBadge(_ isOnBucketList: Bool) -> some View {
+        overlay(alignment: .topTrailing) {
+            if isOnBucketList {
+                Image(systemName: "bookmark.circle.fill")
+                    .font(.caption2.weight(.bold))
+                    .imageScale(.small)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(Color.white, Color.visitedDeep)
+                    .offset(x: 4, y: -4)
+            }
+        }
+    }
+
     func visitedBadge(_ isVisited: Bool) -> some View {
         overlay(alignment: .topTrailing) {
             if isVisited {
@@ -85,7 +130,9 @@ private extension View {
         ParkMarker(isVisited: false, isSelected: false)
         ParkMarker(isVisited: true, isSelected: false)
         ParkMarker(isVisited: true, isSelected: true)
+        ParkMarker(isVisited: false, isOnBucketList: true, isSelected: false)
         ParkClusterMarker(count: 3, visitedCount: 1)
+        ParkClusterMarker(count: 4, visitedCount: 1, bucketListCount: 2)
         ParkClusterMarker(count: 5, visitedCount: 5)
     }
     .padding()

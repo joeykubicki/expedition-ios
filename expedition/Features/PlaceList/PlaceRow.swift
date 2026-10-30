@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// One place in a category list, with a button to mark it visited. Tapping
-/// the rest of the row opens the place's details.
+/// One place in a category list, with a button to mark it visited and a
+/// bookmark when it's on the bucket list. Tapping the rest of the row opens
+/// the place's details.
 struct PlaceRow: View {
     let place: Place
     let subtitle: String?
     let isVisited: Bool
+    var isOnBucketList = false
     let onToggleVisited: () -> Void
+    var onToggleBucketList: () -> Void = {}
     let onSelect: () -> Void
 
     private var flag: String? {
@@ -17,6 +20,14 @@ struct PlaceRow: View {
         isVisited ? "Mark as Not Visited" : "Mark as Visited"
     }
 
+    private var bucketListTitle: LocalizedStringResource {
+        isOnBucketList ? "Remove from Bucket List" : "Add to Bucket List"
+    }
+
+    private var status: LocalizedStringResource {
+        if isVisited { "Visited" } else if isOnBucketList { "On bucket list" } else { "Not visited" }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if let flag {
@@ -25,7 +36,14 @@ struct PlaceRow: View {
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(place.name)
+                HStack(spacing: 6) {
+                    Text(place.name)
+                    if isOnBucketList, !isVisited {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption)
+                            .foregroundStyle(place.category.visitedColor)
+                    }
+                }
                 if let subtitle {
                     Text(subtitle)
                         .font(.subheadline)
@@ -49,13 +67,26 @@ struct PlaceRow: View {
                    action: onToggleVisited)
                 .tint(isVisited ? .gray : place.category.visitedColor)
         }
+        .swipeActions(edge: .trailing) {
+            if !isVisited {
+                Button(isOnBucketList ? "Remove" : "Bucket List",
+                       systemImage: isOnBucketList ? "bookmark.slash" : "bookmark",
+                       action: onToggleBucketList)
+                    .tint(isOnBucketList ? .gray : .visitedDeep)
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(subtitle.map { "\(place.name), \($0)" } ?? place.name)
-        .accessibilityValue(isVisited ? "Visited" : "Not visited")
+        .accessibilityValue(Text(status))
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Shows details and memories")
         .accessibilityAction { onSelect() }
         .accessibilityAction(named: Text(toggleTitle), onToggleVisited)
+        .accessibilityActions {
+            if !isVisited {
+                Button(bucketListTitle, action: onToggleBucketList)
+            }
+        }
     }
 }
 
@@ -79,6 +110,7 @@ struct PlaceRow: View {
     List {
         PlaceRow(place: zion, subtitle: "Utah", isVisited: true, onToggleVisited: {}, onSelect: {})
         PlaceRow(place: zion, subtitle: "Utah", isVisited: false, onToggleVisited: {}, onSelect: {})
+        PlaceRow(place: zion, subtitle: "Utah", isVisited: false, isOnBucketList: true, onToggleVisited: {}, onSelect: {})
         PlaceRow(place: japan, subtitle: nil, isVisited: true, onToggleVisited: {}, onSelect: {})
     }
 }

@@ -10,10 +10,11 @@ import UniformTypeIdentifiers
 /// only milliseconds, they round-trip exactly, so re-importing a file is a no-op.
 /// Visit dates are plain year/month/day numbers (see `VisitDate`).
 ///
-/// Version history: 1 had no visits; 2 added `visits`.
+/// Version history: 1 had no visits; 2 added `visits`; 3 added the bucket
+/// list (`isOnBucketList`, `bucketListAddedAt`).
 nonisolated struct ExportFile: Codable, Sendable {
     static let formatIdentifier = "expedition-export"
-    static let currentVersion = 2
+    static let currentVersion = 3
 
     var format = Self.formatIdentifier
     var version = Self.currentVersion
@@ -31,6 +32,9 @@ nonisolated struct ExportedEntry: Codable, Equatable, Sendable {
     /// `nil` in version 1 files, which predate visits. (Their `visitDates`
     /// field was always empty, since the app had no way to enter dates.)
     var visits: [Visit]?
+    /// `nil` in files before version 3.
+    var isOnBucketList: Bool?
+    var bucketListAddedAt: Date?
     var notes: String
     var favorites: [FavoriteItem]
     var memories: [Memory]
@@ -143,6 +147,8 @@ private extension ExportedEntry {
             code: entry.placeCode,
             isVisited: entry.isVisited,
             visits: entry.visits.sorted(by: Visit.newestFirst),
+            isOnBucketList: entry.isOnBucketList,
+            bucketListAddedAt: entry.bucketListAddedAt,
             notes: entry.notes,
             favorites: entry.favorites,
             memories: entry.memories,
@@ -158,6 +164,9 @@ private extension PlaceEntry {
         entryID = record.entryID
         isVisited = record.isVisited
         visits = record.visits ?? []
+        // Visited wins, as everywhere else.
+        isOnBucketList = (record.isOnBucketList ?? false) && !record.isVisited
+        bucketListAddedAt = isOnBucketList ? record.bucketListAddedAt ?? record.updatedAt : nil
         notes = record.notes
         favorites = record.favorites
         memories = record.memories

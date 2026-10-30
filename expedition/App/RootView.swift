@@ -50,8 +50,8 @@ struct RootView: View {
     }
 }
 
-/// One tab per place category, then the timeline. Remembers the last
-/// selected tab.
+/// One tab per place category, then the bucket list and the timeline.
+/// Remembers the last selected tab.
 struct CategoryTabView: View {
     @AppStorage("selectedTab") private var selectedTab = AppTab.park
 
@@ -61,6 +61,9 @@ struct CategoryTabView: View {
                 Tab(category.title, systemImage: category.symbolName, value: AppTab(category)) {
                     CategoryScreen(category: category)
                 }
+            }
+            Tab("Bucket List", systemImage: "bookmark", value: AppTab.bucketList) {
+                BucketListScreen()
             }
             Tab("Timeline", systemImage: "calendar", value: AppTab.timeline) {
                 TimelineScreen()
@@ -72,7 +75,7 @@ struct CategoryTabView: View {
 /// Raw values match `PlaceCategory`'s, so the remembered tab from before the
 /// timeline existed still restores.
 nonisolated enum AppTab: String, Sendable {
-    case park, state, country, timeline
+    case park, state, country, bucketList, timeline
 
     init(_ category: PlaceCategory) {
         self = switch category {

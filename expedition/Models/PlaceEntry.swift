@@ -26,7 +26,15 @@ nonisolated enum SchemaV1: VersionedSchema {
         var categoryRaw: String = PlaceCategory.park.rawValue
         /// Park slug, USPS state code, or ISO country code.
         var placeCode: String = ""
+        /// Set through `setVisited(_:)`, which keeps the bucket list in step.
         var isVisited: Bool = false
+        /// On the user's bucket list ("want to go"). Only meaningful for
+        /// places not yet visited: visiting takes a place off, and if sync
+        /// ever leaves both set, visited wins everywhere.
+        var isOnBucketList: Bool = false
+        /// When the place went on the bucket list, for the Bucket List tab's
+        /// order; `nil` when it isn't on it.
+        var bucketListAddedAt: Date?
         /// Trips to the place, in no particular order. Kept when the place is
         /// unmarked (the timeline only shows visited places), so re-marking it
         /// brings them back.
@@ -52,6 +60,29 @@ nonisolated enum SchemaV1: VersionedSchema {
 
         var placeID: PlaceID? {
             category.map { PlaceID(category: $0, code: placeCode) }
+        }
+
+        /// On the bucket list and not visited.
+        var wantsToVisit: Bool {
+            isOnBucketList && !isVisited
+        }
+
+        /// Marking a place visited takes it off the bucket list; unmarking
+        /// doesn't put it back. Returns whether it came off the bucket list.
+        @discardableResult
+        func setVisited(_ visited: Bool) -> Bool {
+            isVisited = visited
+            guard visited, isOnBucketList else { return false }
+            setOnBucketList(false)
+            return true
+        }
+
+        /// Visited places can't go on the bucket list.
+        func setOnBucketList(_ onList: Bool, at date: Date = .now) {
+            let onList = onList && !isVisited
+            guard onList != isOnBucketList else { return }
+            isOnBucketList = onList
+            bucketListAddedAt = onList ? date : nil
         }
     }
 }

@@ -12,8 +12,10 @@ struct PlaceList: View {
 
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
-    @Query private var visitedEntries: [PlaceEntry]
+    /// Visited or on the bucket list.
+    @Query private var markedEntries: [PlaceEntry]
     @State private var feedbackTrigger = 0
+    @State private var checkedOffTrigger = 0
 
     init(category: PlaceCategory, searchText: String, visitFilter: Binding<VisitFilter>, selectedPlace: Binding<Place?>) {
         self.category = category
@@ -21,7 +23,9 @@ struct PlaceList: View {
         _visitFilter = visitFilter
         _selectedPlace = selectedPlace
         let raw = category.rawValue
-        _visitedEntries = Query(filter: #Predicate<PlaceEntry> { $0.categoryRaw == raw && $0.isVisited })
+        _markedEntries = Query(filter: #Predicate<PlaceEntry> {
+            $0.categoryRaw == raw && ($0.isVisited || $0.isOnBucketList)
+        })
     }
 
     /// Parks are few enough not to need an A–Z index.
@@ -30,15 +34,20 @@ struct PlaceList: View {
     }
 
     private var visitedCodes: Set<String> {
-        Set(visitedEntries.map(\.placeCode))
+        Set(markedEntries.filter(\.isVisited).map(\.placeCode))
     }
 
-    private var sections: [(initial: String, places: [Place])] {
+    private var bucketListCodes: Set<String> {
+        Set(markedEntries.filter(\.wantsToVisit).map(\.placeCode))
+    }
+
+    private func sections(visitedCodes: Set<String>, bucketListCodes: Set<String>) -> [(initial: String, places: [Place])] {
         let places = PlaceListFilter.filter(
             referenceData.places(in: category),
             searchText: searchText,
             visitFilter: visitFilter,
             visitedCodes: visitedCodes,
+            bucketListCodes: bucketListCodes,
             stateNames: referenceData.stateNames
         )
         if showsIndex {
@@ -48,14 +57,16 @@ struct PlaceList: View {
     }
 
     var body: some View {
-        let sections = sections
         let visitedCodes = visitedCodes
+        let bucketListCodes = bucketListCodes
+        let sections = sections(visitedCodes: visitedCodes, bucketListCodes: bucketListCodes)
         List {
             Section {
                 CategoryProgressHeader(category: category)
                 Picker("Show", selection: $visitFilter) {
                     Text("All").tag(VisitFilter.all)
                     Text("Visited").tag(VisitFilter.visited)
+                    Text("Bucket List").tag(VisitFilter.bucketList)
                     Text("Not Visited").tag(VisitFilter.notVisited)
                 }
                 .pickerStyle(.segmented)
@@ -74,7 +85,9 @@ struct PlaceList: View {
                             place: place,
                             subtitle: subtitle(for: place),
                             isVisited: visitedCodes.contains(place.id.code),
-                            onToggleVisited: { toggleVisited(place) },
+                            isOnBucketList: bucketListCodes.contains(place.id.code),
+                            onToggleVisited: { toggleVisited(place, wasOnBucketList: bucketListCodes.contains(place.id.code)) },
+                            onToggleBucketList: { toggleBucketList(place, isOnList: bucketListCodes.contains(place.id.code)) },
                             onSelect: { selectedPlace = place }
                         )
                     }
@@ -90,6 +103,7 @@ struct PlaceList: View {
         .scrollContentBackground(.hidden)
         .background(Color.paper)
         .sensoryFeedback(.impact(weight: .medium), trigger: feedbackTrigger)
+        .sensoryFeedback(.success, trigger: checkedOffTrigger)
     }
 
     @ViewBuilder
@@ -101,6 +115,12 @@ struct PlaceList: View {
                 "No \(category.pluralNoun) visited yet",
                 systemImage: category.symbolName,
                 description: Text("Tap the circle next to a place to mark it visited.")
+            )
+        } else if visitFilter == .bucketList {
+            ContentUnavailableView(
+                "No \(category.pluralNoun) on your bucket list",
+                systemImage: "bookmark",
+                description: Text("Swipe left on a place, or open it and tap Add to Bucket List.")
             )
         } else {
             ContentUnavailableView(
@@ -119,12 +139,25 @@ struct PlaceList: View {
         return summary == place.name ? nil : summary
     }
 
-    private func toggleVisited(_ place: Place) {
+    private func toggleVisited(_ place: Place, wasOnBucketList: Bool) {
         do {
-            try PlaceEntryStore(context: modelContext).toggleVisited(for: place.id)
-            feedbackTrigger += 1
+            let isVisited = try PlaceEntryStore(context: modelContext).toggleVisited(for: place.id)
+            if isVisited, wasOnBucketList {
+                checkedOffTrigger += 1
+                AccessibilityNotification.Announcement("Checked \(place.name) off your bucket list").post()
+            } else {
+                feedbackTrigger += 1
+            }
         } catch {
             Logger.data.error("Toggling visited for \(place.id.code) failed: \(error)")
+        }
+    }
+
+    private func toggleBucketList(_ place: Place, isOnList: Bool) {
+        do {
+            try PlaceEntryStore(context: modelContext).setOnBucketList(!isOnList, for: place.id)
+        } catch {
+            Logger.data.error("Changing the bucket list for \(place.id.code) failed: \(error)")
         }
     }
 }

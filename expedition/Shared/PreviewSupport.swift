@@ -40,6 +40,18 @@ enum PreviewSupport {
         (PlaceID(category: .country, code: "IS"), [Visit(start: VisitDate(year: 2022, month: 9, day: 8))]),
     ]
 
+    /// Places to go, with when they were added (days ago).
+    static let sampleBucketList: [(PlaceID, days: Double)] = [
+        (PlaceID(category: .park, code: "glacier"), 3),
+        (PlaceID(category: .park, code: "denali"), 40),
+        (PlaceID(category: .park, code: "acadia"), 120),
+        (PlaceID(category: .state, code: "MT"), 3),
+        (PlaceID(category: .state, code: "AK"), 40),
+        (PlaceID(category: .country, code: "IT"), 10),
+        (PlaceID(category: .country, code: "NO"), 60),
+        (PlaceID(category: .country, code: "PT"), 200),
+    ]
+
     /// An in-memory container, optionally filled with sample visited places.
     static func container(withSampleData: Bool = true) -> ModelContainer {
         do {
@@ -59,6 +71,9 @@ enum PreviewSupport {
                 // Some visited places are left undated to fill "No Dates Yet".
                 for (id, visits) in sampleVisits {
                     try store.entryOrCreate(for: id).visits = visits
+                }
+                for (id, days) in sampleBucketList {
+                    try store.entryOrCreate(for: id).setOnBucketList(true, at: .now.addingTimeInterval(-days * 86_400))
                 }
                 try container.mainContext.save()
                 try PhotoLibrary(context: container.mainContext).add(

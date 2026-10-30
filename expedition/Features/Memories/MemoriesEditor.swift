@@ -30,7 +30,18 @@ final class MemoriesEditor {
     // MARK: Visited
 
     func toggleVisited() {
-        edit { $0.isVisited.toggle() }
+        edit { $0.setVisited(!$0.isVisited) }
+    }
+
+    // MARK: Bucket list
+
+    /// On the bucket list and not visited.
+    var isOnBucketList: Bool { entry?.wantsToVisit ?? false }
+
+    func toggleBucketList() {
+        guard !isVisited else { return }
+        let onList = !isOnBucketList
+        edit { $0.setOnBucketList(onList, at: store.now()) }
     }
 
     // MARK: Visits
@@ -45,7 +56,7 @@ final class MemoriesEditor {
         let marksVisited = !isVisited
         edit {
             $0.visits.append(visit)
-            $0.isVisited = true
+            $0.setVisited(true)
         }
         return marksVisited
     }

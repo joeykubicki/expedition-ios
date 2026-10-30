@@ -9,6 +9,10 @@ struct PlaceDetailSheet: View {
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.dismiss) private var dismiss
     @State private var feedbackTrigger = 0
+    @State private var checkedOffTrigger = 0
+    /// Shows "Checked off your bucket list" for a moment after visiting a
+    /// bucket-list place, however it was marked (button or new visit).
+    @State private var isShowingCheckedOff = false
     @State private var viewingPhoto: PlacePhoto?
 
     init(place: Place, store: PlaceEntryStore) {
@@ -23,6 +27,11 @@ struct PlaceDetailSheet: View {
                     PlaceDetailHeader(place: place, stateSummary: referenceData.stateSummary(for: place))
                         .padding(.top, 12) // keep the eyebrow clear of the row's rounded corner
                     visitedButton
+                    if isShowingCheckedOff {
+                        checkedOffMessage
+                    } else if !editor.isVisited {
+                        bucketListButton
+                    }
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -48,6 +57,12 @@ struct PlaceDetailSheet: View {
                 }
             }
             .sensoryFeedback(.impact(weight: .medium), trigger: feedbackTrigger)
+            .sensoryFeedback(.success, trigger: checkedOffTrigger)
+            .onChange(of: editor.isOnBucketList) { wasOnList, isOnList in
+                if wasOnList, !isOnList, editor.isVisited {
+                    celebrateCheckOff()
+                }
+            }
         }
         .fullScreenCover(item: $viewingPhoto) { photo in
             PhotoViewer(placeID: place.id, startingAt: photo)
@@ -71,6 +86,44 @@ struct PlaceDetailSheet: View {
         }
         .buttonStyle(VisitedButtonStyle(isVisited: editor.isVisited, color: place.category.visitedColor))
         .accessibilityHint(editor.isVisited ? "Double-tap to mark as not visited" : "")
+    }
+}
+
+extension PlaceDetailSheet {
+    private var bucketListButton: some View {
+        Button {
+            editor.toggleBucketList()
+        } label: {
+            Label(
+                editor.isOnBucketList ? "On Your Bucket List" : "Add to Bucket List",
+                systemImage: editor.isOnBucketList ? "bookmark.fill" : "bookmark"
+            )
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.borderless)
+        .tint(place.category.visitedColor)
+        .accessibilityValue(editor.isOnBucketList ? "On" : "Off")
+        .accessibilityHint(editor.isOnBucketList ? "Double-tap to remove from your bucket list" : "")
+    }
+
+    private var checkedOffMessage: some View {
+        Label("Checked off your bucket list", systemImage: "checkmark.seal.fill")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(place.category.visitedColor)
+            .frame(maxWidth: .infinity)
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+
+    private func celebrateCheckOff() {
+        checkedOffTrigger += 1
+        AccessibilityNotification.Announcement("Checked off your bucket list").post()
+        withAnimation(.snappy) { isShowingCheckedOff = true }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(.snappy) { isShowingCheckedOff = false }
+        }
     }
 }
 

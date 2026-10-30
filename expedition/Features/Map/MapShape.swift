@@ -11,6 +11,14 @@ struct MapShape: Identifiable {
     /// at the antimeridian (see `AntimeridianSeams`); `nil` otherwise.
     let seamlessOutline: [MKPolyline]?
 
+    /// Every ring as lines, for drawing a dashed border on top (bucket-list
+    /// places), using the seamless outline where there is one.
+    var outline: [MKPolyline] {
+        seamlessOutline ?? ([polygon] + (polygon.interiorPolygons ?? [])).map { ring in
+            MKPolyline(points: ring.points(), count: ring.pointCount)
+        }
+    }
+
     static func shapes(for places: [Place]) -> [MapShape] {
         places.flatMap { place in
             (place.boundary ?? []).enumerated().map { index, part in

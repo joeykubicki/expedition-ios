@@ -11,6 +11,7 @@ struct CategoryScreen: View {
     @State private var searchText = ""
     @State private var cameraPosition: MapCameraPosition
     @State private var selectedPlace: Place?
+    @State private var isSharingMap = false
 
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
@@ -54,12 +55,22 @@ struct CategoryScreen: View {
                             showsMap.toggle()
                         }
                     }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Share Map Image", systemImage: "square.and.arrow.up") {
+                            isSharingMap = true
+                        }
+                        .disabled(!referenceData.isLoaded)
+                    }
                 }
                 .sheet(item: $selectedPlace) { place in
                     PlaceDetailSheet(place: place, store: PlaceEntryStore(context: modelContext))
                 }
+                .sheet(isPresented: $isSharingMap) {
+                    SharePreviewSheet(category: category)
+                }
                 #if DEBUG
                 .onAppear(perform: openPlaceFromLaunchArgument)
+                .onAppear { isSharingMap = UserDefaults.standard.bool(forKey: "OpenShareImage") }
                 #endif
         }
     }
@@ -77,7 +88,8 @@ struct CategoryScreen: View {
 
     #if DEBUG
     /// Launch with `-OpenPlace <code>` (and `-selectedTab <category>`) to open
-    /// a place's sheet directly, for simulator screenshots.
+    /// a place's sheet directly, for simulator screenshots. `-OpenShareImage
+    /// YES` opens the share image sheet instead.
     private func openPlaceFromLaunchArgument() {
         guard let code = UserDefaults.standard.string(forKey: "OpenPlace") else { return }
         selectedPlace = referenceData.place(for: PlaceID(category: category, code: code))

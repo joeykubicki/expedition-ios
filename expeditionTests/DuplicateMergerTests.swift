@@ -16,7 +16,8 @@ struct DuplicateMergerTests {
         notes: String = "",
         favorites: [FavoriteItem] = [],
         memories: [Memory] = [],
-        visits: [Visit] = []
+        visits: [Visit] = [],
+        bucketListSince: Date? = nil
     ) -> PlaceEntry {
         let entry = PlaceEntry(placeID: id ?? yosemite, createdAt: createdAt ?? early)
         entry.updatedAt = updatedAt ?? entry.createdAt
@@ -25,7 +26,35 @@ struct DuplicateMergerTests {
         entry.favorites = favorites
         entry.memories = memories
         entry.visits = visits
+        if let bucketListSince {
+            entry.isOnBucketList = true
+            entry.bucketListAddedAt = bucketListSince
+        }
         return entry
+    }
+
+    // MARK: Bucket list
+
+    @Test func bucketListIfAnyCopyHasItSinceTheEarliest() {
+        let (survivor, _) = DuplicateMerger.merge([
+            makeEntry(createdAt: early),
+            makeEntry(createdAt: late, bucketListSince: late),
+            makeEntry(createdAt: late.addingTimeInterval(1), bucketListSince: early),
+        ])
+
+        #expect(survivor.isOnBucketList)
+        #expect(survivor.bucketListAddedAt == early)
+    }
+
+    @Test func visitedCopyTakesThePlaceOffTheBucketList() {
+        let (survivor, _) = DuplicateMerger.merge([
+            makeEntry(createdAt: early, bucketListSince: early),
+            makeEntry(createdAt: late, visited: true),
+        ])
+
+        #expect(survivor.isVisited)
+        #expect(!survivor.isOnBucketList)
+        #expect(survivor.bucketListAddedAt == nil)
     }
 
     // MARK: Survivor

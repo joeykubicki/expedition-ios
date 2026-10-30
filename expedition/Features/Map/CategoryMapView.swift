@@ -10,7 +10,8 @@ struct CategoryMapView: View {
     @Binding var selectedPlace: Place?
 
     @Environment(ReferenceDataStore.self) private var referenceData
-    @Query private var visitedEntries: [PlaceEntry]
+    /// Visited or on the bucket list.
+    @Query private var markedEntries: [PlaceEntry]
     @State private var shapes: [MapShape] = []
     @State private var mapWidth: Double = 0
     /// Width of the visible area in `MKMapPoint`s, updated when the camera stops.
@@ -26,11 +27,14 @@ struct CategoryMapView: View {
         _position = position
         _selectedPlace = selectedPlace
         let raw = category.rawValue
-        _visitedEntries = Query(filter: #Predicate<PlaceEntry> { $0.categoryRaw == raw && $0.isVisited })
+        _markedEntries = Query(filter: #Predicate<PlaceEntry> {
+            $0.categoryRaw == raw && ($0.isVisited || $0.isOnBucketList)
+        })
     }
 
     var body: some View {
-        let visitedCodes = Set(visitedEntries.map(\.placeCode))
+        let visitedCodes = Set(markedEntries.filter(\.isVisited).map(\.placeCode))
+        let bucketListCodes = Set(markedEntries.filter(\.wantsToVisit).map(\.placeCode))
         MapReader { proxy in
             Map(position: $position) {
                 ForEach(shapes) { shape in
@@ -38,7 +42,7 @@ struct CategoryMapView: View {
                     let stroke = isSelected ? Color.ink : Color.boundary
                     let lineWidth = isSelected ? 2.5 : 0.5
                     MapPolygon(shape.polygon)
-                        .foregroundStyle(fill(for: shape, visitedCodes: visitedCodes))
+                        .foregroundStyle(fill(for: shape, visitedCodes: visitedCodes, bucketListCodes: bucketListCodes))
                         .stroke(shape.seamlessOutline == nil ? stroke : .clear, lineWidth: lineWidth)
                     if let outline = shape.seamlessOutline {
                         ForEach(outline.indices, id: \.self) { index in
@@ -49,6 +53,19 @@ struct CategoryMapView: View {
                 }
                 .mapOverlayLevel(level: .aboveRoads)
 
+                // Dashed borders on bucket-list places, drawn over their
+                // neighbors' solid ones: the cue that isn't just color.
+                if category != .park {
+                    ForEach(shapes.filter { bucketListCodes.contains($0.placeID.code) }) { shape in
+                        let outline = shape.outline
+                        ForEach(outline.indices, id: \.self) { index in
+                            MapPolyline(outline[index])
+                                .stroke(category.visitedColor, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                        }
+                    }
+                    .mapOverlayLevel(level: .aboveRoads)
+                }
+
                 if category == .park {
                     ForEach(parkClusters) { cluster in
                         Annotation(
@@ -57,9 +74,11 @@ struct CategoryMapView: View {
                             anchor: .center
                         ) {
                             if cluster.isSingle {
-                                parkButton(cluster.parks[0], isVisited: visitedCodes.contains(cluster.parks[0].id.code))
+                                let park = cluster.parks[0]
+                                parkButton(park, isVisited: visitedCodes.contains(park.id.code),
+                                           isOnBucketList: bucketListCodes.contains(park.id.code))
                             } else {
-                                clusterButton(cluster, visitedCodes: visitedCodes)
+                                clusterButton(cluster, visitedCodes: visitedCodes, bucketListCodes: bucketListCodes)
                             }
                         }
                     }
@@ -87,7 +106,7 @@ struct CategoryMapView: View {
             ))
             .padding(.top, 8)
         }
-        .modifier(OutlineMapAccessibility(category: category, visitedCount: visitedCodes.count))
+        .modifier(OutlineMapAccessibility(category: category, visitedCount: visitedCodes.count, bucketListCount: bucketListCodes.count))
         .task {
             // Parks sit on plain parchment states; the other tabs color their own outlines.
             shapes = MapShape.shapes(for: category == .country ? referenceData.countries : referenceData.states)
@@ -108,37 +127,42 @@ struct CategoryMapView: View {
             + selected.map { ParkCluster(parks: [$0]) }
     }
 
-    private func fill(for shape: MapShape, visitedCodes: Set<String>) -> Color {
-        if category != .park, visitedCodes.contains(shape.placeID.code) {
+    private func fill(for shape: MapShape, visitedCodes: Set<String>, bucketListCodes: Set<String>) -> Color {
+        guard category != .park else { return Color.land.opacity(0.6) }
+        if visitedCodes.contains(shape.placeID.code) {
             return category.visitedColor.opacity(0.75)
+        }
+        if bucketListCodes.contains(shape.placeID.code) {
+            return Color.visitedSoft.opacity(0.8)
         }
         return Color.land.opacity(0.6)
     }
 
-    private func parkButton(_ park: Place, isVisited: Bool) -> some View {
+    private func parkButton(_ park: Place, isVisited: Bool, isOnBucketList: Bool) -> some View {
         Button {
             selectedPlace = park
         } label: {
-            ParkMarker(isVisited: isVisited, isSelected: selectedPlace?.id == park.id)
+            ParkMarker(isVisited: isVisited, isOnBucketList: isOnBucketList, isSelected: selectedPlace?.id == park.id)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(park.name)
-        .accessibilityValue(isVisited ? "Visited" : "Not visited")
+        .accessibilityValue(isVisited ? "Visited" : isOnBucketList ? "On bucket list" : "Not visited")
         .accessibilityHint("Shows details and memories")
     }
 
-    private func clusterButton(_ cluster: ParkCluster, visitedCodes: Set<String>) -> some View {
+    private func clusterButton(_ cluster: ParkCluster, visitedCodes: Set<String>, bucketListCodes: Set<String>) -> some View {
         let visitedCount = cluster.parks.count { visitedCodes.contains($0.id.code) }
+        let bucketListCount = cluster.parks.count { bucketListCodes.contains($0.id.code) }
         return Button {
             withAnimation {
                 position = .region(cluster.zoomRegion)
             }
         } label: {
-            ParkClusterMarker(count: cluster.parks.count, visitedCount: visitedCount)
+            ParkClusterMarker(count: cluster.parks.count, visitedCount: visitedCount, bucketListCount: bucketListCount)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(cluster.parks.count) parks: \(cluster.parks.map(\.name).formatted(.list(type: .and)))")
-        .accessibilityValue("\(visitedCount) visited")
+        .accessibilityValue(bucketListCount > 0 ? "\(visitedCount) visited, \(bucketListCount) on bucket list" : "\(visitedCount) visited")
         .accessibilityHint("Zooms in to show these parks")
     }
 }
@@ -148,6 +172,7 @@ struct CategoryMapView: View {
 private struct OutlineMapAccessibility: ViewModifier {
     let category: PlaceCategory
     let visitedCount: Int
+    let bucketListCount: Int
 
     func body(content: Content) -> some View {
         if category == .park {
@@ -155,7 +180,9 @@ private struct OutlineMapAccessibility: ViewModifier {
         } else {
             content
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Map of \(category.pluralNoun), \(visitedCount) visited")
+                .accessibilityLabel(bucketListCount > 0
+                    ? "Map of \(category.pluralNoun), \(visitedCount) visited, \(bucketListCount) on your bucket list"
+                    : "Map of \(category.pluralNoun), \(visitedCount) visited")
                 .accessibilityHint("Switch to the list to browse and mark every place.")
         }
     }

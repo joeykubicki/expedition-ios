@@ -45,6 +45,7 @@ struct DataTransferTests {
         ]
         try store.setVisited(true, for: utah)
         try store.entryOrCreate(for: japan).notes = "Want to go back"
+        try store.setOnBucketList(true, for: japan)
         try store.context.save()
     }
 
@@ -118,7 +119,8 @@ struct DataTransferTests {
 
         #expect(first == second)
         #expect(json.contains("\"format\" : \"expedition-export\""))
-        #expect(json.contains("\"version\" : 2"))
+        #expect(json.contains("\"version\" : 3"))
+        #expect(json.contains("\"isOnBucketList\" : true"))
         #expect(json.contains("\"year\" : 2016"))
         #expect(json.contains("\"exportedAt\" : 1800000000"))
         #expect(json.contains("https://www.alltrails.com/trail/x"))
@@ -130,8 +132,8 @@ struct DataTransferTests {
     }
 
     @Test func rejectsNewerVersionWithHelpfulError() {
-        let data = Data(#"{"format": "expedition-export", "version": 3, "somethingNew": []}"#.utf8)
-        #expect(throws: ImportError.newerVersion(3)) { try DataTransfer.decode(data) }
+        let data = Data(#"{"format": "expedition-export", "version": 4, "somethingNew": []}"#.utf8)
+        #expect(throws: ImportError.newerVersion(4)) { try DataTransfer.decode(data) }
     }
 
     @Test func rejectsMalformedFiles() {
@@ -157,6 +159,48 @@ struct DataTransferTests {
         let zion = try #require(try store.entry(for: zion))
         #expect(zion.notes == "Old notes")
         #expect(zion.visits.isEmpty)
+    }
+
+    @Test func readsVersion2FilesWithoutABucketList() throws {
+        let json = """
+        {"format": "expedition-export", "version": 2, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "country", "code": "IT",
+           "isVisited": false, "notes": "Someday", "favorites": [], "memories": [], "visits": [],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        let store = try makeStore()
+
+        _ = try DataTransfer.importFile(try DataTransfer.decode(Data(json.utf8)), into: store)
+
+        let italy = try #require(try store.entry(for: PlaceID(category: .country, code: "IT")))
+        #expect(!italy.isOnBucketList)
+        #expect(italy.bucketListAddedAt == nil)
+    }
+
+    /// Hand-edited or odd files: visited wins, as everywhere else.
+    @Test func importedVisitedPlacesAreNotOnTheBucketList() throws {
+        let json = """
+        {"format": "expedition-export", "version": 3, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "country", "code": "IT",
+           "isVisited": true, "isOnBucketList": true, "bucketListAddedAt": 1793361600,
+           "notes": "", "favorites": [], "memories": [], "visits": [],
+           "createdAt": 1793361600, "updatedAt": 1793361600},
+          {"entryID": "00000000-0000-0000-0000-000000000003", "category": "country", "code": "NO",
+           "isVisited": false, "isOnBucketList": true, "bucketListAddedAt": 1793361600,
+           "notes": "", "favorites": [], "memories": [], "visits": [],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        let store = try makeStore()
+
+        _ = try DataTransfer.importFile(try DataTransfer.decode(Data(json.utf8)), into: store)
+
+        #expect(try store.bucketListCodes(in: .country) == ["NO"])
+        #expect(try store.entry(for: PlaceID(category: .country, code: "IT"))?.isOnBucketList == false)
+        #expect(try store.entry(for: PlaceID(category: .country, code: "NO"))?.bucketListAddedAt == Date(timeIntervalSince1970: 1793361600))
     }
 
     @Test func readsVisitsAtEveryPrecision() throws {

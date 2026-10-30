@@ -24,6 +24,11 @@ enum DuplicateMerger {
         guard !duplicates.isEmpty else { return (survivor, []) }
 
         survivor.isVisited = ordered.contains { $0.isVisited }
+        // On the list if any copy is, unless the place has been visited;
+        // listed since the earliest copy that has it.
+        let listedSince = ordered.filter(\.isOnBucketList).compactMap(\.bucketListAddedAt).min()
+        survivor.isOnBucketList = !survivor.isVisited && ordered.contains { $0.isOnBucketList }
+        survivor.bucketListAddedAt = survivor.isOnBucketList ? listedSince ?? survivor.bucketListAddedAt : nil
         survivor.visits = mergedVisits(ordered.map(\.visits))
         survivor.notes = mergedNotes(ordered.map(\.notes))
         survivor.favorites = mergedFavorites(ordered.map(\.favorites))

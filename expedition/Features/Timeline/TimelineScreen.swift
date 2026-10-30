@@ -7,7 +7,7 @@ struct TimelineScreen: View {
     @Query private var entries: [PlaceEntry]
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
-    @SceneStorage("timeline.filter") private var filter = TimelineFilter.all
+    @SceneStorage("timeline.filter") private var filter = CategoryFilter.all
     @State private var selectedPlace: Place?
 
     var body: some View {
@@ -15,13 +15,7 @@ struct TimelineScreen: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Show", selection: $filter) {
-                        ForEach(TimelineFilter.allCases, id: \.self) { filter in
-                            Text(filter.title).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    CategoryFilterPicker(selection: $filter)
                 }
 
                 if timeline.isEmpty {
@@ -32,7 +26,7 @@ struct TimelineScreen: View {
                 ForEach(timeline.years) { year in
                     Section {
                         ForEach(year.items) { item in
-                            TimelineRow(place: item.place, detail: item.visit.formatted()) {
+                            PlaceSummaryRow(place: item.place, detail: item.visit.formatted(), hint: "Shows details and memories") {
                                 selectedPlace = item.place
                             }
                         }
@@ -44,7 +38,7 @@ struct TimelineScreen: View {
                 if !timeline.undated.isEmpty {
                     Section {
                         ForEach(timeline.undated) { place in
-                            TimelineRow(place: place, detail: nil) {
+                            PlaceSummaryRow(place: place, detail: place.category.eyebrow, hint: "Shows details, where you can add visit dates") {
                                 selectedPlace = place
                             }
                         }
@@ -83,18 +77,6 @@ struct TimelineScreen: View {
     }
 }
 
-enum TimelineFilter: String, CaseIterable {
-    case all, park, state, country
-
-    var category: PlaceCategory? {
-        PlaceCategory(rawValue: rawValue)
-    }
-
-    var title: LocalizedStringResource {
-        category?.title ?? "All"
-    }
-}
-
 /// "2024" in the display serif, with how many places that year.
 private struct TimelineYearHeader: View {
     let year: Timeline.Year
@@ -112,53 +94,6 @@ private struct TimelineYearHeader: View {
         }
         .textCase(nil)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A place on the timeline: its flag or category icon, name, and the visit's
-/// dates (or its category, for places without dates).
-private struct TimelineRow: View {
-    let place: Place
-    /// The visit's dates; `nil` in the No Dates Yet section.
-    let detail: String?
-    let onSelect: () -> Void
-
-    @ScaledMetric(relativeTo: .title2) private var iconWidth = 32.0
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 12) {
-                icon
-                    .frame(width: iconWidth)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(place.name)
-                        .foregroundStyle(Color.ink)
-                    Text(detail ?? place.category.eyebrow)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([place.name, place.category.eyebrow, detail].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(detail == nil ? "Shows details, where you can add visit dates" : "Shows details and memories")
-    }
-
-    @ViewBuilder
-    private var icon: some View {
-        if place.category == .country, let flag = FlagEmoji.forRegionCode(place.id.code) {
-            Text(flag)
-                .font(.title2)
-        } else {
-            Image(systemName: place.category.symbolName)
-                .font(.title3)
-                .foregroundStyle(place.category.visitedColor)
-        }
     }
 }
 

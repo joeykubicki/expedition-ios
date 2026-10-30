@@ -46,7 +46,9 @@ expedition/
     PlaceDetail/
     Memories/
     Visits/            # Visit dates in the detail sheet
+    BucketList/        # The Bucket List tab
     Photos/            # Photo compression, the detail sheet's photo row, the viewer
+    ShareImage/        # The shareable map poster: projections, layout, rendering
     Timeline/          # The Timeline tab
     Stats/
     Settings/          # Export/import, about, sync status
@@ -83,9 +85,11 @@ A `PlaceCategory` enum: `park`, `state`, `country`. **Store it in SwiftData as i
 
 ### User data shape (starting point, refine as needed)
 
-A `PlaceEntry` model per place the user has interacted with, containing: category (raw string), place ID, whether it's visited, visits, notes, a list of favorite items (hikes with optional URL, or cities), a list of favorite memories, and created/updated timestamps. Simple lists of value types can be `Codable` structs stored on the model.
+A `PlaceEntry` model per place the user has interacted with, containing: category (raw string), place ID, whether it's visited, whether it's on the bucket list (and since when), visits, notes, a list of favorite items (hikes with optional URL, or cities), a list of favorite memories, and created/updated timestamps. Simple lists of value types can be `Codable` structs stored on the model.
 
 A `Visit` is a start and optional end `VisitDate`. A `VisitDate` is year, optional month, optional day (day, month, or year precision), stored as numbers rather than `Date` so it names the same day in every time zone. Unmarking a place keeps its visits; the timeline only shows visited places.
+
+The bucket list ("want to go") is for places not yet visited. Change visited state through `PlaceEntry.setVisited(_:)`, which takes a place off the bucket list (unmarking doesn't put it back). If sync ever leaves both flags set, visited wins everywhere (`wantsToVisit`).
 
 A `PlacePhoto` is a separate model linked to its place by category and code (not a relationship, so duplicate entries never split photos). It holds a small inline thumbnail and the full image in external storage (a CloudKit asset). Photos are compressed on the way in (at most 2048 px, HEIC, no metadata), capped at 12 per place, kept when a place is unmarked, and not included in JSON export.
 
@@ -111,18 +115,18 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 - **Sync status awareness:** observe CloudKit sync events (`NSPersistentCloudKitContainer.eventChangedNotification`) and show a small, dismissible banner when sync fails, especially for iCloud quota exceeded. The message must reassure the user that their data is safe on the device.
 - **JSON export/import** in Settings: export all user data to a versioned JSON file via the share sheet / Files, and import it back (merging, not overwriting, by default)
 
-### v1.1 (in progress, in this order)
+### v1.1 (done)
 
 1. Visit dates and a timeline view (done: a fourth Timeline tab)
 2. Photos (done: per place, in the detail sheet)
-3. Shareable rendered image of the user's map
+3. Shareable rendered image of the user's map (done: a share button on each map tab; drawn from the bundled shapes, with Alaska and Hawaii insets on the poster only)
 
-### v2 (direction only; don't build unless asked)
+### v2 (in progress)
 
 Depth over breadth: make the existing three categories richer rather than adding new place types.
 
-- Bucket list ("want to go"): a third state alongside visited / not visited, with its own filter and map styling
-- Deeper timeline (building on v1.1's visit dates)
+1. Bucket list (done: a fifth Bucket List tab, a list filter, dashed map styling, checked off automatically when visited; the share poster stays visited-only)
+2. Deeper timeline, chosen: trips (overlapping visits grouped), year stats ("5 places · 3 new"), and first-visit tags. Later candidates: year map, year-in-review poster, per-visit notes.
 
 ### Out of scope
 
