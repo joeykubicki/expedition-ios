@@ -14,6 +14,7 @@ struct ExpeditionApp: App {
         return try ModelContainerFactory.make()
     }
     @State private var referenceData = ReferenceDataStore()
+    @State private var syncMonitor = SyncMonitor()
 
     var body: some Scene {
         WindowGroup {
@@ -21,6 +22,7 @@ struct ExpeditionApp: App {
             case .success(let container):
                 RootView()
                     .environment(referenceData)
+                    .environment(syncMonitor)
                     .modelContainer(container)
             case .failure(let error):
                 StartupErrorView(error: error)

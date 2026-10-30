@@ -125,6 +125,7 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 - Follow iOS conventions over web patterns: tab bar navigation, bottom sheets instead of map popups, tap instead of hover, native lists and search.
 - Map approach (decided): Apple Maps base (SwiftUI `Map`) with a muted style and themed `MapPolygon`/`Annotation` overlays for states, countries, and parks. Not a custom-drawn atlas.
 - Simplify country geometry before bundling so map rendering stays fast.
+- Borders follow de facto control, as Natural Earth's default data draws them (e.g. Morocco's outline includes the part of Western Sahara it administers; the rest is unassigned). Exception: Somaliland and Northern Cyprus are folded into Somalia and Cyprus (`MERGES` in the build script). Don't change border policy without asking.
 
 ## Accessibility (required, not optional)
 

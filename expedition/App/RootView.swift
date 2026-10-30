@@ -5,6 +5,7 @@ import SwiftUI
 /// Loads reference data, keeps duplicate entries merged, and shows the tabs.
 struct RootView: View {
     @Environment(ReferenceDataStore.self) private var referenceData
+    @Environment(SyncMonitor.self) private var syncMonitor
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
@@ -24,6 +25,9 @@ struct RootView: View {
         }
         .task {
             await referenceData.load()
+        }
+        .task {
+            await syncMonitor.start()
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {

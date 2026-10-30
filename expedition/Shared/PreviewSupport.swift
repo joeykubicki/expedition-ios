@@ -59,6 +59,7 @@ extension View {
     func previewEnvironment(withSampleData: Bool = true) -> some View {
         modelContainer(PreviewSupport.container(withSampleData: withSampleData))
             .environment(PreviewSupport.referenceData())
+            .environment(SyncMonitor())
     }
 }
 #endif

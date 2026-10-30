@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncMonitor.self) private var syncMonitor
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -13,10 +14,14 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Your Data") {
-                    Text("Export and import will appear here.")
-                        .foregroundStyle(.secondary)
+                Section {
+                    SyncStatusRow(status: syncMonitor.state.status)
+                } header: {
+                    Text("iCloud Sync")
+                } footer: {
+                    Text("Your places sync to your private iCloud account. They're always saved on this iPhone too.")
                 }
+                DataTransferSection()
                 Section("About") {
                     LabeledContent("Version", value: version)
                     Text("Map data from Natural Earth.")
@@ -34,6 +39,9 @@ struct SettingsView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     SettingsView()
+        .previewEnvironment()
 }
+#endif

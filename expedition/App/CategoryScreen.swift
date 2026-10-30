@@ -14,6 +14,7 @@ struct CategoryScreen: View {
     @State private var isShowingSettings = false
 
     @Environment(ReferenceDataStore.self) private var referenceData
+    @Environment(SyncMonitor.self) private var syncMonitor
     @Environment(\.modelContext) private var modelContext
 
     init(category: PlaceCategory) {
@@ -45,6 +46,13 @@ struct CategoryScreen: View {
     var body: some View {
         NavigationStack {
             content
+                .safeAreaInset(edge: .top) {
+                    if let problem = syncMonitor.bannerProblem {
+                        SyncBanner(problem: problem, onDismiss: syncMonitor.dismissBanner)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.snappy, value: syncMonitor.bannerProblem)
                 .navigationTitle(category.title)
                 .navigationBarTitleDisplayMode(showsMap ? .inline : .large)
                 .toolbar {
