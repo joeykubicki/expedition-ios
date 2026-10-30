@@ -50,17 +50,35 @@ struct RootView: View {
     }
 }
 
-/// One tab per place category. Remembers the last selected tab.
+/// One tab per place category, then the timeline. Remembers the last
+/// selected tab.
 struct CategoryTabView: View {
-    @AppStorage("selectedTab") private var selectedTab = PlaceCategory.park
+    @AppStorage("selectedTab") private var selectedTab = AppTab.park
 
     var body: some View {
         TabView(selection: $selectedTab) {
             ForEach(PlaceCategory.allCases, id: \.self) { category in
-                Tab(category.title, systemImage: category.symbolName, value: category) {
+                Tab(category.title, systemImage: category.symbolName, value: AppTab(category)) {
                     CategoryScreen(category: category)
                 }
             }
+            Tab("Timeline", systemImage: "calendar", value: AppTab.timeline) {
+                TimelineScreen()
+            }
+        }
+    }
+}
+
+/// Raw values match `PlaceCategory`'s, so the remembered tab from before the
+/// timeline existed still restores.
+nonisolated enum AppTab: String, Sendable {
+    case park, state, country, timeline
+
+    init(_ category: PlaceCategory) {
+        self = switch category {
+        case .park: .park
+        case .state: .state
+        case .country: .country
         }
     }
 }

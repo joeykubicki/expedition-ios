@@ -11,10 +11,8 @@ struct CategoryScreen: View {
     @State private var searchText = ""
     @State private var cameraPosition: MapCameraPosition
     @State private var selectedPlace: Place?
-    @State private var isShowingSettings = false
 
     @Environment(ReferenceDataStore.self) private var referenceData
-    @Environment(SyncMonitor.self) private var syncMonitor
     @Environment(\.modelContext) private var modelContext
 
     init(category: PlaceCategory) {
@@ -46,13 +44,7 @@ struct CategoryScreen: View {
     var body: some View {
         NavigationStack {
             content
-                .safeAreaInset(edge: .top) {
-                    if let problem = syncMonitor.bannerProblem {
-                        SyncBanner(problem: problem, onDismiss: syncMonitor.dismissBanner)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-                .animation(.snappy, value: syncMonitor.bannerProblem)
+                .tabScreenChrome()
                 .navigationTitle(category.title)
                 .navigationBarTitleDisplayMode(showsMap ? .inline : .large)
                 .toolbar {
@@ -62,14 +54,6 @@ struct CategoryScreen: View {
                             showsMap.toggle()
                         }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Settings", systemImage: "gearshape") {
-                            isShowingSettings = true
-                        }
-                    }
-                }
-                .sheet(isPresented: $isShowingSettings) {
-                    SettingsView()
                 }
                 .sheet(item: $selectedPlace) { place in
                     PlaceDetailSheet(place: place, store: PlaceEntryStore(context: modelContext))

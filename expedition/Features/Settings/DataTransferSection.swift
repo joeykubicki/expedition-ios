@@ -39,7 +39,7 @@ struct DataTransferSection: View {
         } header: {
             Text("Your Data")
         } footer: {
-            Text("Export saves all your places and memories to a file. Importing adds a file's places to yours. Nothing is deleted or overwritten.")
+            Text("Export saves all your places and memories to a file. Photos aren't included; they sync with iCloud. Importing adds a file's places to yours. Nothing is deleted or overwritten.")
         }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
             importResult = handleImport(result)

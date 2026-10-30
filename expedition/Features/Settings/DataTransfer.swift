@@ -8,9 +8,12 @@ import UniformTypeIdentifiers
 ///
 /// Dates are seconds since 1970 (UTC). Unlike ISO 8601 strings, which keep
 /// only milliseconds, they round-trip exactly, so re-importing a file is a no-op.
+/// Visit dates are plain year/month/day numbers (see `VisitDate`).
+///
+/// Version history: 1 had no visits; 2 added `visits`.
 nonisolated struct ExportFile: Codable, Sendable {
     static let formatIdentifier = "expedition-export"
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     var format = Self.formatIdentifier
     var version = Self.currentVersion
@@ -25,7 +28,9 @@ nonisolated struct ExportedEntry: Codable, Equatable, Sendable {
     var category: String
     var code: String
     var isVisited: Bool
-    var visitDates: [Date]
+    /// `nil` in version 1 files, which predate visits. (Their `visitDates`
+    /// field was always empty, since the app had no way to enter dates.)
+    var visits: [Visit]?
     var notes: String
     var favorites: [FavoriteItem]
     var memories: [Memory]
@@ -137,7 +142,7 @@ private extension ExportedEntry {
             category: entry.categoryRaw,
             code: entry.placeCode,
             isVisited: entry.isVisited,
-            visitDates: entry.visitDates,
+            visits: entry.visits.sorted(by: Visit.newestFirst),
             notes: entry.notes,
             favorites: entry.favorites,
             memories: entry.memories,
@@ -152,7 +157,7 @@ private extension PlaceEntry {
         self.init(placeID: placeID, createdAt: record.createdAt)
         entryID = record.entryID
         isVisited = record.isVisited
-        visitDates = record.visitDates
+        visits = record.visits ?? []
         notes = record.notes
         favorites = record.favorites
         memories = record.memories

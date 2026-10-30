@@ -7,7 +7,7 @@ nonisolated enum SchemaV1: VersionedSchema {
     static let versionIdentifier = Schema.Version(1, 0, 0)
 
     static var models: [any PersistentModel.Type] {
-        [PlaceEntry.self]
+        [PlaceEntry.self, PlacePhoto.self]
     }
 
     /// What the user has recorded about one place. Synced via CloudKit, so:
@@ -27,8 +27,10 @@ nonisolated enum SchemaV1: VersionedSchema {
         /// Park slug, USPS state code, or ISO country code.
         var placeCode: String = ""
         var isVisited: Bool = false
-        /// Not shown in v1; reserved for the v1.1 timeline.
-        var visitDates: [Date] = []
+        /// Trips to the place, in no particular order. Kept when the place is
+        /// unmarked (the timeline only shows visited places), so re-marking it
+        /// brings them back.
+        var visits: [Visit] = []
         var notes: String = ""
         /// Favorite hikes (parks) or favorite cities (states and countries).
         var favorites: [FavoriteItem] = []

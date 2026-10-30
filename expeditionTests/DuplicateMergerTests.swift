@@ -16,7 +16,7 @@ struct DuplicateMergerTests {
         notes: String = "",
         favorites: [FavoriteItem] = [],
         memories: [Memory] = [],
-        visitDates: [Date] = []
+        visits: [Visit] = []
     ) -> PlaceEntry {
         let entry = PlaceEntry(placeID: id ?? yosemite, createdAt: createdAt ?? early)
         entry.updatedAt = updatedAt ?? entry.createdAt
@@ -24,7 +24,7 @@ struct DuplicateMergerTests {
         entry.notes = notes
         entry.favorites = favorites
         entry.memories = memories
-        entry.visitDates = visitDates
+        entry.visits = visits
         return entry
     }
 
@@ -107,12 +107,16 @@ struct DuplicateMergerTests {
     }
 
     @Test func datesAreCombined() {
+        let june = Visit(start: VisitDate(year: 2021, month: 6))
+        let sameTripOtherDevice = Visit(start: VisitDate(year: 2021, month: 6))
+        let trip2016 = Visit(start: VisitDate(year: 2016))
+        let trip2023 = Visit(start: VisitDate(year: 2023, month: 10, day: 12), end: VisitDate(year: 2023, month: 10, day: 15))
         let survivor = DuplicateMerger.merge([
-            makeEntry(createdAt: early, updatedAt: early, visitDates: [late]),
-            makeEntry(createdAt: late, updatedAt: late.addingTimeInterval(500), visitDates: [early, late]),
+            makeEntry(createdAt: early, updatedAt: early, visits: [trip2016, june]),
+            makeEntry(createdAt: late, updatedAt: late.addingTimeInterval(500), visits: [june, sameTripOtherDevice, trip2023]),
         ]).survivor
 
-        #expect(survivor.visitDates == [early, late])
+        #expect(survivor.visits == [trip2023, june, trip2016], "Same dates count once; newest first")
         #expect(survivor.createdAt == early)
         #expect(survivor.updatedAt == late.addingTimeInterval(500))
     }

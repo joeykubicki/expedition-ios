@@ -39,7 +39,10 @@ struct DataTransferTests {
         entry.notes = "Hiked the Narrows"
         entry.favorites = [FavoriteItem(name: "Angels Landing", url: URL(string: "https://www.alltrails.com/trail/x"))]
         entry.memories = [Memory(text: "Bighorn sheep", createdAt: Date(timeIntervalSince1970: 1_700_000_100))]
-        entry.visitDates = [Date(timeIntervalSince1970: 1_690_000_000)]
+        entry.visits = [
+            Visit(start: VisitDate(year: 2023, month: 10, day: 12), end: VisitDate(year: 2023, month: 10, day: 15)),
+            Visit(start: VisitDate(year: 2016)),
+        ]
         try store.setVisited(true, for: utah)
         try store.entryOrCreate(for: japan).notes = "Want to go back"
         try store.context.save()
@@ -115,7 +118,8 @@ struct DataTransferTests {
 
         #expect(first == second)
         #expect(json.contains("\"format\" : \"expedition-export\""))
-        #expect(json.contains("\"version\" : 1"))
+        #expect(json.contains("\"version\" : 2"))
+        #expect(json.contains("\"year\" : 2016"))
         #expect(json.contains("\"exportedAt\" : 1800000000"))
         #expect(json.contains("https://www.alltrails.com/trail/x"))
     }
@@ -126,14 +130,85 @@ struct DataTransferTests {
     }
 
     @Test func rejectsNewerVersionWithHelpfulError() {
-        let data = Data(#"{"format": "expedition-export", "version": 2, "somethingNew": []}"#.utf8)
-        #expect(throws: ImportError.newerVersion(2)) { try DataTransfer.decode(data) }
+        let data = Data(#"{"format": "expedition-export", "version": 3, "somethingNew": []}"#.utf8)
+        #expect(throws: ImportError.newerVersion(3)) { try DataTransfer.decode(data) }
     }
 
     @Test func rejectsMalformedFiles() {
         #expect(throws: ImportError.unreadable) { try DataTransfer.decode(Data("not json".utf8)) }
         let missingEntries = Data(#"{"format": "expedition-export", "version": 1}"#.utf8)
         #expect(throws: ImportError.unreadable) { try DataTransfer.decode(missingEntries) }
+    }
+
+    /// Version 1 files predate visits; their `visitDates` was always empty.
+    @Test func readsVersion1Files() throws {
+        let json = """
+        {"format": "expedition-export", "version": 1, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "park", "code": "zion",
+           "isVisited": true, "visitDates": [], "notes": "Old notes", "favorites": [], "memories": [],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        let store = try makeStore()
+
+        _ = try DataTransfer.importFile(try DataTransfer.decode(Data(json.utf8)), into: store)
+
+        let zion = try #require(try store.entry(for: zion))
+        #expect(zion.notes == "Old notes")
+        #expect(zion.visits.isEmpty)
+    }
+
+    @Test func readsVisitsAtEveryPrecision() throws {
+        let json = """
+        {"format": "expedition-export", "version": 2, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "country", "code": "FR",
+           "isVisited": true, "notes": "", "favorites": [], "memories": [],
+           "visits": [
+             {"id": "00000000-0000-0000-0000-00000000000A", "start": {"year": 2019, "month": 5}, "end": {"year": 2019, "month": 6}},
+             {"id": "00000000-0000-0000-0000-00000000000B", "start": {"year": 2012}},
+             {"id": "00000000-0000-0000-0000-00000000000C", "start": {"year": 2024, "month": 2, "day": 29}}
+           ],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        let file = try DataTransfer.decode(Data(json.utf8))
+        let visits = try #require(file.entries.first?.visits)
+
+        #expect(visits.map(\.start.precision) == [.month, .year, .day])
+        #expect(visits[0].end == VisitDate(year: 2019, month: 6))
+    }
+
+    @Test(arguments: [
+        #"{"year": 2019, "month": 13}"#,                 // no 13th month
+        #"{"year": 2023, "month": 2, "day": 29}"#,       // not a leap year
+        #"{"year": 2019, "day": 4}"#,                    // day without month
+    ])
+    func rejectsImpossibleVisitDates(_ date: String) {
+        let json = """
+        {"format": "expedition-export", "version": 2, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "park", "code": "zion",
+           "isVisited": true, "notes": "", "favorites": [], "memories": [],
+           "visits": [{"id": "00000000-0000-0000-0000-00000000000A", "start": \(date)}],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        #expect(throws: ImportError.unreadable) { try DataTransfer.decode(Data(json.utf8)) }
+    }
+
+    @Test func rejectsVisitsEndingBeforeTheyStart() {
+        let json = """
+        {"format": "expedition-export", "version": 2, "exportedAt": 1793361600,
+         "entries": [
+          {"entryID": "00000000-0000-0000-0000-000000000002", "category": "park", "code": "zion",
+           "isVisited": true, "notes": "", "favorites": [], "memories": [],
+           "visits": [{"id": "00000000-0000-0000-0000-00000000000A", "start": {"year": 2020}, "end": {"year": 2019}}],
+           "createdAt": 1793361600, "updatedAt": 1793361600}
+         ]}
+        """
+        #expect(throws: ImportError.unreadable) { try DataTransfer.decode(Data(json.utf8)) }
     }
 
     @Test func skipsUnknownCategories() throws {

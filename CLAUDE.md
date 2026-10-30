@@ -45,6 +45,9 @@ expedition/
     PlaceList/
     PlaceDetail/
     Memories/
+    Visits/            # Visit dates in the detail sheet
+    Photos/            # Photo compression, the detail sheet's photo row, the viewer
+    Timeline/          # The Timeline tab
     Stats/
     Settings/          # Export/import, about, sync status
   Shared/              # Reusable views, theme/colors, utilities
@@ -80,7 +83,11 @@ A `PlaceCategory` enum: `park`, `state`, `country`. **Store it in SwiftData as i
 
 ### User data shape (starting point, refine as needed)
 
-A `PlaceEntry` model per place the user has interacted with, containing: category (raw string), place ID, whether it's visited, optional visit date(s), notes, a list of favorite items (hikes with optional URL, or cities), a list of favorite memories, and created/updated timestamps. Simple lists of value types can be `Codable` structs stored on the model.
+A `PlaceEntry` model per place the user has interacted with, containing: category (raw string), place ID, whether it's visited, visits, notes, a list of favorite items (hikes with optional URL, or cities), a list of favorite memories, and created/updated timestamps. Simple lists of value types can be `Codable` structs stored on the model.
+
+A `Visit` is a start and optional end `VisitDate`. A `VisitDate` is year, optional month, optional day (day, month, or year precision), stored as numbers rather than `Date` so it names the same day in every time zone. Unmarking a place keeps its visits; the timeline only shows visited places.
+
+A `PlacePhoto` is a separate model linked to its place by category and code (not a relationship, so duplicate entries never split photos). It holds a small inline thumbnail and the full image in external storage (a CloudKit asset). Photos are compressed on the way in (at most 2048 px, HEIC, no metadata), capped at 12 per place, kept when a place is unmarked, and not included in JSON export.
 
 ### CloudKit rules (mandatory for every @Model)
 
@@ -104,12 +111,19 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 - **Sync status awareness:** observe CloudKit sync events (`NSPersistentCloudKitContainer.eventChangedNotification`) and show a small, dismissible banner when sync fails, especially for iCloud quota exceeded. The message must reassure the user that their data is safe on the device.
 - **JSON export/import** in Settings: export all user data to a versioned JSON file via the share sheet / Files, and import it back (merging, not overwriting, by default)
 
-### v1.1 (not yet; don't build unless asked)
+### v1.1 (in progress, in this order)
 
-- Photos on memories (via `PhotosPicker`; store compressed images, not originals)
-- Visit dates and a timeline view
-- Home-screen widget showing progress
-- Shareable rendered image of the user's map
+1. Visit dates and a timeline view (done: a fourth Timeline tab)
+2. Photos (done: per place, in the detail sheet)
+3. Home-screen widget showing progress
+4. Shareable rendered image of the user's map
+
+### v2 (direction only; don't build unless asked)
+
+Depth over breadth: make the existing three categories richer rather than adding new place types.
+
+- Bucket list ("want to go"): a third state alongside visited / not visited, with its own filter and map styling
+- Deeper timeline (building on v1.1's visit dates)
 
 ### Out of scope
 

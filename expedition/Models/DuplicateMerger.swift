@@ -24,7 +24,7 @@ enum DuplicateMerger {
         guard !duplicates.isEmpty else { return (survivor, []) }
 
         survivor.isVisited = ordered.contains { $0.isVisited }
-        survivor.visitDates = Set(ordered.flatMap(\.visitDates)).sorted()
+        survivor.visits = mergedVisits(ordered.map(\.visits))
         survivor.notes = mergedNotes(ordered.map(\.notes))
         survivor.favorites = mergedFavorites(ordered.map(\.favorites))
         survivor.memories = mergedMemories(ordered.map(\.memories))
@@ -81,6 +81,22 @@ enum DuplicateMerger {
             result.append(memory)
         }
         return result
+    }
+
+    /// Unions by ID, and treats the same dates as one visit, since both devices
+    /// may have entered the same trip. Sorted newest first so every device
+    /// stores the same order.
+    private static func mergedVisits(_ lists: [[Visit]]) -> [Visit] {
+        var result: [Visit] = []
+        var seenIDs: Set<UUID> = []
+        var seenDates: Set<[VisitDate?]> = []
+        for visit in lists.joined() {
+            guard seenIDs.insert(visit.id).inserted,
+                  seenDates.insert([visit.start, visit.end]).inserted
+            else { continue }
+            result.append(visit)
+        }
+        return result.sorted(by: Visit.newestFirst)
     }
 
     private static func normalized(_ text: String) -> String {

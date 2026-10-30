@@ -9,6 +9,7 @@ struct PlaceDetailSheet: View {
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.dismiss) private var dismiss
     @State private var feedbackTrigger = 0
+    @State private var viewingPhoto: PlacePhoto?
 
     init(place: Place, store: PlaceEntryStore) {
         self.place = place
@@ -27,6 +28,8 @@ struct PlaceDetailSheet: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
 
+                VisitsSection(editor: editor) { feedbackTrigger += 1 }
+                PhotosSection(placeID: place.id) { viewingPhoto = $0 }
                 NotesSection(editor: editor)
                 FavoritesSection(editor: editor, category: place.category)
                 MemoriesSection(editor: editor)
@@ -45,6 +48,9 @@ struct PlaceDetailSheet: View {
                 }
             }
             .sensoryFeedback(.impact(weight: .medium), trigger: feedbackTrigger)
+        }
+        .fullScreenCover(item: $viewingPhoto) { photo in
+            PhotoViewer(placeID: place.id, startingAt: photo)
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

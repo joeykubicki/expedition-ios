@@ -33,6 +33,33 @@ final class MemoriesEditor {
         edit { $0.isVisited.toggle() }
     }
 
+    // MARK: Visits
+
+    /// Newest first.
+    var visits: [Visit] { (entry?.visits ?? []).sorted(by: Visit.newestFirst) }
+
+    /// Adds a visit, marking the place visited if it wasn't. Returns whether
+    /// it did, so the caller can give the same feedback as the Visited button.
+    @discardableResult
+    func addVisit(_ visit: Visit) -> Bool {
+        let marksVisited = !isVisited
+        edit {
+            $0.visits.append(visit)
+            $0.isVisited = true
+        }
+        return marksVisited
+    }
+
+    func updateVisit(_ visit: Visit) {
+        guard let index = entry?.visits.firstIndex(where: { $0.id == visit.id }) else { return }
+        edit { $0.visits[index] = visit }
+    }
+
+    func removeVisit(id: Visit.ID) {
+        guard entry?.visits.contains(where: { $0.id == id }) == true else { return }
+        edit { $0.visits.removeAll { $0.id == id } }
+    }
+
     // MARK: Notes
 
     /// Stores notes as typed (trimming mid-typing would eat spaces).
