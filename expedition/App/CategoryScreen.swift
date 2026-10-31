@@ -11,7 +11,9 @@ struct CategoryScreen: View {
     @State private var searchText = ""
     @State private var cameraPosition: MapCameraPosition
     @State private var selectedPlace: Place?
+    #if DEBUG
     @State private var isSharingMap = false
+    #endif
 
     @Environment(ReferenceDataStore.self) private var referenceData
     @Environment(\.modelContext) private var modelContext
@@ -55,20 +57,16 @@ struct CategoryScreen: View {
                             showsMap.toggle()
                         }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Share Map Image", systemImage: "square.and.arrow.up") {
-                            isSharingMap = true
-                        }
-                        .disabled(!referenceData.isLoaded)
-                    }
                 }
                 .sheet(item: $selectedPlace) { place in
                     PlaceDetailSheet(place: place, store: PlaceEntryStore(context: modelContext))
                 }
+                #if DEBUG
+                // Sharing lives in Settings; this sheet is only for the
+                // `-OpenShareImage` screenshot launch argument.
                 .sheet(isPresented: $isSharingMap) {
                     SharePreviewSheet(category: category)
                 }
-                #if DEBUG
                 .onAppear(perform: openPlaceFromLaunchArgument)
                 .onAppear { isSharingMap = UserDefaults.standard.bool(forKey: "OpenShareImage") }
                 #endif

@@ -71,6 +71,7 @@ struct FavoritesSection: View {
             Button(action: add) {
                 Label(String(localized: category.addFavoriteTitle), systemImage: "plus.circle.fill")
             }
+            .padding(.top, 12)
             .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.vertical, 4)

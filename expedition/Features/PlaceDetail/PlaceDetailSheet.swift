@@ -2,7 +2,9 @@ import SwiftData
 import SwiftUI
 
 /// Bottom sheet for one place: visited state and memories. Opened from the
-/// list (and later the map). Edits save as you go.
+/// list (and later the map). Edits save as you go. Visits, photos, and
+/// memories only show once the place is visited; unmarking hides them but
+/// keeps them, so re-marking brings them back.
 struct PlaceDetailSheet: View {
     let place: Place
     @State private var editor: MemoriesEditor
@@ -14,6 +16,8 @@ struct PlaceDetailSheet: View {
     /// bucket-list place, however it was marked (button or new visit).
     @State private var isShowingCheckedOff = false
     @State private var viewingPhoto: PlacePhoto?
+    @State private var detent: PresentationDetent = .medium
+    @State private var editMode: EditMode = .inactive
 
     init(place: Place, store: PlaceEntryStore) {
         self.place = place
@@ -31,17 +35,20 @@ struct PlaceDetailSheet: View {
                         checkedOffMessage
                     } else if !editor.isVisited {
                         bucketListButton
+                        unvisitedHint
                     }
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
 
-                VisitsSection(editor: editor) { feedbackTrigger += 1 }
-                PhotosSection(placeID: place.id) { viewingPhoto = $0 }
-                NotesSection(editor: editor)
-                FavoritesSection(editor: editor, category: place.category)
-                MemoriesSection(editor: editor)
+                if editor.isVisited {
+                    VisitsSection(editor: editor)
+                    PhotosSection(placeID: place.id) { viewingPhoto = $0 }
+                    NotesSection(editor: editor)
+                    FavoritesSection(editor: editor, category: place.category)
+                    MemoriesSection(editor: editor)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color.paper)
@@ -49,8 +56,10 @@ struct PlaceDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .contentMargins(.top, 0, for: .scrollContent)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    EditButton()
+                if hasEditableItems {
+                    ToolbarItem(placement: .topBarLeading) {
+                        EditButton()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -63,17 +72,33 @@ struct PlaceDetailSheet: View {
                     celebrateCheckOff()
                 }
             }
+            .onChange(of: hasEditableItems) { _, hasItems in
+                if !hasItems { editMode = .inactive }
+            }
+            .environment(\.editMode, $editMode)
         }
         .fullScreenCover(item: $viewingPhoto) { photo in
             PhotoViewer(placeID: place.id, startingAt: photo)
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
     }
 
+    /// Whether Edit has anything to delete or reorder. Notes and photos
+    /// don't respond to edit mode, so they don't count. Leaves edit mode
+    /// when this goes false, so the next item isn't added mid-edit.
+    private var hasEditableItems: Bool {
+        editor.isVisited && !(editor.visits.isEmpty && editor.favorites.isEmpty && editor.memories.isEmpty)
+    }
+
+    /// Marking visited reveals the info sections and grows the sheet so
+    /// they're in view.
     private var visitedButton: some View {
         Button {
-            editor.toggleVisited()
+            withAnimation(.snappy) {
+                editor.toggleVisited()
+                if editor.isVisited { detent = .large }
+            }
             feedbackTrigger += 1
         } label: {
             Label(
@@ -82,7 +107,7 @@ struct PlaceDetailSheet: View {
             )
             .font(.headline)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .padding(.vertical, 14)
         }
         .buttonStyle(VisitedButtonStyle(isVisited: editor.isVisited, color: place.category.visitedColor))
         .accessibilityHint(editor.isVisited ? "Double-tap to mark as not visited" : "")
@@ -100,12 +125,24 @@ extension PlaceDetailSheet {
             )
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
             .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
         .tint(place.category.visitedColor)
         .accessibilityValue(editor.isOnBucketList ? "On" : "Off")
         .accessibilityHint(editor.isOnBucketList ? "Double-tap to remove from your bucket list" : "")
+    }
+
+    private var unvisitedHint: some View {
+        Text("Mark as visited to add trips, photos, and notes.")
+            .font(.subheadline)
+            .foregroundStyle(Color.inkSoft)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
     }
 
     private var checkedOffMessage: some View {

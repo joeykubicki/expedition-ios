@@ -119,7 +119,7 @@ Because uniqueness can't be enforced, code that creates a `PlaceEntry` must look
 
 1. Visit dates and a timeline view (done: a fourth Timeline tab)
 2. Photos (done: per place, in the detail sheet)
-3. Shareable rendered image of the user's map (done: a share button on each map tab; drawn from the bundled shapes, with Alaska and Hawaii insets on the poster only)
+3. Shareable rendered image of the user's map (done: a Share Map Image section in Settings, one row per category; drawn from the bundled shapes, with Alaska and Hawaii insets on the poster only)
 
 ### v2 (in progress)
 

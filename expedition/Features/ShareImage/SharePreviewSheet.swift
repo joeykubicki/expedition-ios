@@ -4,7 +4,7 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The category map poster's share sheet, opened from each map tab.
+/// The category map poster's share sheet, opened from Settings.
 struct SharePreviewSheet: View {
     let category: PlaceCategory
 

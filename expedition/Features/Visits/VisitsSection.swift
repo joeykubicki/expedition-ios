@@ -3,8 +3,6 @@ import SwiftUI
 /// A place's visits in the detail sheet, newest first. Tap one to edit it.
 struct VisitsSection: View {
     let editor: MemoriesEditor
-    /// Called when adding a visit marks the place visited, for haptics.
-    let onMarkedVisited: () -> Void
 
     @State private var editing: EditingVisit?
 
@@ -40,10 +38,6 @@ struct VisitsSection: View {
             }
         } header: {
             Text("Visits")
-        } footer: {
-            if !editor.isVisited, !editor.visits.isEmpty {
-                Text("Mark as visited to show these on your timeline.")
-            }
         }
         .sheet(item: $editing) { item in
             VisitEditor(
@@ -58,9 +52,7 @@ struct VisitsSection: View {
     private func save(_ draft: VisitDraft, id: UUID, isNew: Bool) {
         guard let visit = draft.visit(id: id) else { return }
         if isNew {
-            if editor.addVisit(visit) {
-                onMarkedVisited()
-            }
+            editor.addVisit(visit)
         } else {
             editor.updateVisit(visit)
         }

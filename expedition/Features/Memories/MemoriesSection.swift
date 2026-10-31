@@ -30,6 +30,7 @@ struct MemoriesSection: View {
                 Button(action: add) {
                     Label("Add Memory", systemImage: "plus.circle.fill")
                 }
+                .padding(.top, 12)
                 .disabled(newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(.vertical, 4)

@@ -14,6 +14,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                ShareMapSection()
                 Section {
                     SyncStatusRow(status: syncMonitor.state.status)
                 } header: {
