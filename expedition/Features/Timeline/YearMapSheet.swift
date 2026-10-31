@@ -78,6 +78,7 @@ struct YearMapSheet: View {
             }
             #endif
         }
+        .presentationSizing(.page) // room for the map and trips on iPad
     }
 
     private func content(_ map: YearMap) -> some View {

@@ -36,6 +36,7 @@ struct BucketListScreen: View {
                     }
                 }
             }
+            .readableContentWidth()
             .scrollContentBackground(.hidden)
             .background(Color.paper)
             .tabScreenChrome()
@@ -89,6 +90,7 @@ struct BucketListScreen: View {
             try PlaceEntryStore(context: modelContext).setVisited(true, for: place.id)
             checkedOffTrigger += 1
             AccessibilityNotification.Announcement("Checked \(place.name) off your bucket list").post()
+            ReviewPrompt(context: modelContext).requestIfDue()
         } catch {
             Logger.data.error("Marking \(place.id.code) visited failed: \(error)")
         }

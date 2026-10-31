@@ -10,6 +10,11 @@ struct ExpeditionApp: App {
         if ProcessInfo.processInfo.arguments.contains("-UseSampleData") {
             return PreviewSupport.container()
         }
+        // `-ScreenshotData`: the same, plus enough places for App Store
+        // screenshots.
+        if ProcessInfo.processInfo.arguments.contains("-ScreenshotData") {
+            return PreviewSupport.screenshotContainer()
+        }
         #endif
         return try ModelContainerFactory.make()
     }

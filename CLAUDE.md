@@ -6,9 +6,10 @@ Expedition is a native iOS app for tracking places you've visited: US National P
 
 This is a brand-new native app inspired by an existing web app. It is **not** a 1:1 port. Carry over the functionality, theme, and goals, but follow iOS conventions and best practices wherever they differ from the web version.
 
-- Target: iPhone first (iPad should work but isn't a v1 design focus)
+- Target: iPhone and iPad, portrait only. iPad uses the iPhone layouts, adapted: lists use `readableContentWidth()`, and sheets use `.presentationSizing(.page)`. Inside an iPad sheet `horizontalSizeClass` reads compact, so check `windowHorizontalSizeClass` (set by `RootView`) to tell iPad from iPhone there.
 - iOS only. No Android, no web, no shared backend.
 - Bundle ID: `com.kubickilabs.expedition`
+- App Store name: "Expedition: Travel Atlas" (set in App Store Connect). Home screen name: "Expedition" (`CFBundleDisplayName` in `Info.plist`); in-app text also says "Expedition".
 - Minimum deployment target: iOS 26.4 (must be iOS 17+ for SwiftData, Observation, and SwiftUI MapKit)
 
 ## Reference: the original web app
@@ -179,3 +180,6 @@ Later candidates: per-visit notes.
 - iCloud/CloudKit requires a paid Apple Developer account and the iCloud (CloudKit) and Background Modes → Remote notifications capabilities, configured in Xcode by the user.
 - Before the first App Store release, the CloudKit schema must be deployed from development to production in the CloudKit Console, or sync will silently fail for real users.
 - CloudKit sync doesn't work reliably in the Simulator; verify sync on real devices.
+- The privacy policy exists twice: in the app (`PrivacyPolicyView.swift`, Settings → About) and as `docs/privacy-policy.html`, hosted on kubickilabs.com. Change both together, with a new effective date. If the app ever collects data or adds a third-party service, the policy and the App Store privacy label must change too.
+- App Store screenshots: launch a debug build with `-ScreenshotData` (sample data plus ~70 visited places) on the iPhone 6.9" and iPad 13" simulators. The current set is in `app-store/screenshots/`.
+- `AppStoreLink.appID` (in `RateAppSection.swift`) is the app's Apple ID from App Store Connect, `6829112861`. Settings → Rate Expedition links to its review page. The automatic rating prompt (`ReviewPrompt`) doesn't use it.

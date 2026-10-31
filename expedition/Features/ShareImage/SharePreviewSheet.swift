@@ -84,6 +84,7 @@ struct PosterShareSheet<Poster: View>: View {
             }
             .task(id: format) { await render(format) }
         }
+        .presentationSizing(.page) // a bigger poster preview on iPad
     }
 
     @ViewBuilder

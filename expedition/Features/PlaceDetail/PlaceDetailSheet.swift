@@ -17,11 +17,17 @@ struct PlaceDetailSheet: View {
     @State private var isShowingCheckedOff = false
     @State private var viewingPhoto: PlacePhoto?
     @State private var detent: PresentationDetent = .medium
+    @Environment(\.windowHorizontalSizeClass) private var windowSizeClass
     @State private var editMode: EditMode = .inactive
+    private let reviewPrompt: ReviewPrompt
+    /// Taken when the sheet opens, so closing it only asks for a rating if
+    /// something changed here.
+    @State private var countsAtOpen: ReviewPrompt.Counts?
 
     init(place: Place, store: PlaceEntryStore) {
         self.place = place
         _editor = State(initialValue: MemoriesEditor(placeID: place.id, store: store))
+        reviewPrompt = ReviewPrompt(context: store.context)
     }
 
     var body: some View {
@@ -76,11 +82,25 @@ struct PlaceDetailSheet: View {
                 if !hasItems { editMode = .inactive }
             }
             .environment(\.editMode, $editMode)
+            // The photo viewer's full-screen cover also fires these; only
+            // count the sheet opening and closing.
+            .onAppear {
+                if countsAtOpen == nil { countsAtOpen = reviewPrompt.counts() }
+            }
+            .onDisappear {
+                if viewingPhoto == nil { reviewPrompt.requestIfDue(since: countsAtOpen) }
+            }
         }
         .fullScreenCover(item: $viewingPhoto) { photo in
             PhotoViewer(placeID: place.id, startingAt: photo)
         }
-        .presentationDetents([.medium, .large], selection: $detent)
+        // A tall centered card on iPad, opened full height since there's
+        // room; a half-height bottom sheet on iPhone and narrow iPad windows.
+        .presentationSizing(.page)
+        .presentationDetents(
+            windowSizeClass == .regular ? [.large] : [.medium, .large],
+            selection: windowSizeClass == .regular ? .constant(.large) : $detent
+        )
         .presentationDragIndicator(.visible)
     }
 

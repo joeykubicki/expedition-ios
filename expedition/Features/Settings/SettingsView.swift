@@ -25,9 +25,13 @@ struct SettingsView: View {
                 DataTransferSection()
                 Section("About") {
                     LabeledContent("Version", value: version)
+                    NavigationLink("Privacy Policy") {
+                        PrivacyPolicyView()
+                    }
                     Text("Map data from Natural Earth.")
                         .foregroundStyle(.secondary)
                 }
+                RateAppSection()
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

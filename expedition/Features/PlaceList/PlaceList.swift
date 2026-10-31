@@ -100,6 +100,7 @@ struct PlaceList: View {
             }
         }
         .listSectionIndexVisibility(showsIndex ? .visible : .hidden)
+        .readableContentWidth()
         .scrollContentBackground(.hidden)
         .background(Color.paper)
         .sensoryFeedback(.impact(weight: .medium), trigger: feedbackTrigger)
@@ -147,6 +148,9 @@ struct PlaceList: View {
                 AccessibilityNotification.Announcement("Checked \(place.name) off your bucket list").post()
             } else {
                 feedbackTrigger += 1
+            }
+            if isVisited {
+                ReviewPrompt(context: modelContext).requestIfDue()
             }
         } catch {
             Logger.data.error("Toggling visited for \(place.id.code) failed: \(error)")

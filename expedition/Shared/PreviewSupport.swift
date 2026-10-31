@@ -52,6 +52,55 @@ enum PreviewSupport {
         (PlaceID(category: .country, code: "PT"), 200),
     ]
 
+    /// More visited places for App Store screenshots, so the maps and
+    /// progress look lived-in. None are on the sample bucket list.
+    static let screenshotExtraVisited: [PlaceID] =
+        ["bryce-canyon", "capitol-reef", "canyonlands", "grand-teton", "yellowstone", "rocky-mountain",
+         "joshua-tree", "sequoia", "kings-canyon", "olympic", "mount-rainier", "great-smoky-mountains",
+         "shenandoah", "death-valley", "mesa-verde", "great-sand-dunes", "crater-lake", "redwood"]
+            .map { PlaceID(category: .park, code: $0) }
+        + ["NV", "NM", "WY", "ID", "OR", "WA", "TX", "FL", "NY", "MA", "IL", "TN", "NC", "VA", "GA",
+           "HI", "ME", "VT", "PA", "SC"]
+            .map { PlaceID(category: .state, code: $0) }
+        + ["CA", "MX", "GB", "ES", "DE", "NL", "CH", "AT", "GR", "TH", "VN", "NZ", "AU", "CL", "AR",
+           "CR", "MA", "ZA", "KR", "IE", "DK", "SE", "CZ"]
+            .map { PlaceID(category: .country, code: $0) }
+
+    /// Recent trips for screenshots, so the timeline and year in review
+    /// start with full years.
+    static let screenshotVisits: [(PlaceID, [Visit])] = [
+        (PlaceID(category: .park, code: "great-smoky-mountains"), [Visit(start: VisitDate(year: 2026, month: 5, day: 22), end: VisitDate(year: 2026, month: 5, day: 25))]),
+        (PlaceID(category: .state, code: "TN"), [Visit(start: VisitDate(year: 2026, month: 5, day: 21), end: VisitDate(year: 2026, month: 5, day: 26))]),
+        (PlaceID(category: .state, code: "NC"), [Visit(start: VisitDate(year: 2026, month: 5, day: 24), end: VisitDate(year: 2026, month: 5, day: 26))]),
+        (PlaceID(category: .country, code: "CR"), [Visit(start: VisitDate(year: 2026, month: 2, day: 14), end: VisitDate(year: 2026, month: 2, day: 21))]),
+        (PlaceID(category: .country, code: "ES"), [Visit(start: VisitDate(year: 2025, month: 9, day: 3), end: VisitDate(year: 2025, month: 9, day: 12))]),
+        (PlaceID(category: .park, code: "yellowstone"), [Visit(start: VisitDate(year: 2025, month: 6, day: 10), end: VisitDate(year: 2025, month: 6, day: 14))]),
+        (PlaceID(category: .park, code: "grand-teton"), [Visit(start: VisitDate(year: 2025, month: 6, day: 14), end: VisitDate(year: 2025, month: 6, day: 17))]),
+        (PlaceID(category: .state, code: "WY"), [Visit(start: VisitDate(year: 2025, month: 6, day: 10), end: VisitDate(year: 2025, month: 6, day: 17))]),
+        (PlaceID(category: .park, code: "joshua-tree"), [Visit(start: VisitDate(year: 2025, month: 3, day: 8), end: VisitDate(year: 2025, month: 3, day: 10))]),
+        (PlaceID(category: .state, code: "CA"), [Visit(start: VisitDate(year: 2025, month: 3, day: 7), end: VisitDate(year: 2025, month: 3, day: 11))]),
+        (PlaceID(category: .park, code: "bryce-canyon"), [Visit(start: VisitDate(year: 2023, month: 10, day: 16), end: VisitDate(year: 2023, month: 10, day: 17))]),
+    ]
+
+    /// The sample data plus `screenshotExtraVisited` and
+    /// `screenshotVisits`. Launch with `-ScreenshotData`.
+    static func screenshotContainer() -> ModelContainer {
+        let container = container()
+        do {
+            let store = PlaceEntryStore(context: container.mainContext)
+            for id in screenshotExtraVisited {
+                try store.setVisited(true, for: id)
+            }
+            for (id, visits) in screenshotVisits {
+                try store.entryOrCreate(for: id).visits += visits
+            }
+            try container.mainContext.save()
+        } catch {
+            fatalError("Screenshot container failed: \(error)")
+        }
+        return container
+    }
+
     /// An in-memory container, optionally filled with sample visited places.
     static func container(withSampleData: Bool = true) -> ModelContainer {
         do {

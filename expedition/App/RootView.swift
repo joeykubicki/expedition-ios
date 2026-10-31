@@ -8,6 +8,7 @@ struct RootView: View {
     @Environment(SyncMonitor.self) private var syncMonitor
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
         Group {
@@ -23,6 +24,7 @@ struct RootView: View {
                 ProgressView()
             }
         }
+        .environment(\.windowHorizontalSizeClass, horizontalSizeClass)
         .task {
             await referenceData.load()
         }

@@ -63,6 +63,7 @@ struct TimelineScreen: View {
                     }
                 }
             }
+            .readableContentWidth()
             .scrollContentBackground(.hidden)
             .background(Color.paper)
             .tabScreenChrome()

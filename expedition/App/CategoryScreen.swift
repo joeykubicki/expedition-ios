@@ -69,6 +69,7 @@ struct CategoryScreen: View {
                 }
                 .onAppear(perform: openPlaceFromLaunchArgument)
                 .onAppear { isSharingMap = UserDefaults.standard.bool(forKey: "OpenShareImage") }
+                .onAppear { if UserDefaults.standard.bool(forKey: "ShowList") { showsMap = false } }
                 #endif
         }
     }
@@ -87,7 +88,8 @@ struct CategoryScreen: View {
     #if DEBUG
     /// Launch with `-OpenPlace <code>` (and `-selectedTab <category>`) to open
     /// a place's sheet directly, for simulator screenshots. `-OpenShareImage
-    /// YES` opens the share image sheet instead.
+    /// YES` opens the share image sheet instead, and `-ShowList YES` starts
+    /// on the list.
     private func openPlaceFromLaunchArgument() {
         guard let code = UserDefaults.standard.string(forKey: "OpenPlace") else { return }
         selectedPlace = referenceData.place(for: PlaceID(category: category, code: code))
